@@ -1,0 +1,38 @@
+{
+  "name": "lw.raster-to-gcode",
+  "version": "0.1.0",
+  "description": "Raster to GCode for LaserWeb",
+  "main": "./dist/lw.raster-to-gcode.js",
+  "scripts": {
+    "start": "webpack-dev-server --progress --colors",
+    "build-prod": "webpack -p --progress --colors",
+    "build-dev": "webpack --progress --colors"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lautr3k/lw.raster-to-gcode.git"
+  },
+  "keywords": [
+    "raster",
+    "gcode",
+    "engrave",
+    "laserweb"
+  ],
+  "author": "Sébastien Mischler (skarab, Lautr3k)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lautr3k/lw.raster-to-gcode/issues"
+  },
+  "homepage": "https://github.com/lautr3k/lw.raster-to-gcode#readme",
+  "devDependencies": {
+    "babel-core": "^6.20.0",
+    "babel-loader": "^6.2.9",
+    "babel-preset-es2015": "^6.18.0",
+    "babel-preset-react": "^6.16.0",
+    "webpack": "^1.14.0",
+    "webpack-dev-server": "^1.16.2"
+  },
+  "dependencies": {
+    "lw.canvas-grid": "^0.2.0"
+  }
+}
