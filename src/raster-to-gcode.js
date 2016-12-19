@@ -441,9 +441,19 @@ class RasterToGcode extends CanvasGrid {
             }
         }
 
+        let percent     = 0
+        let lastPercent = 0
+
         let processCurrentLine = () => {
             // Process pixels line
             gcode = this._processCurrentLine(reversed)
+
+            // Call progress callback
+            percent = Math.round((y / h) * 100)
+            if (percent > lastPercent) {
+                this._onProgress({ gcode, percent })
+            }
+            lastPercent = percent
 
             // Skip empty gcode line
             if (! gcode) {
@@ -455,9 +465,6 @@ class RasterToGcode extends CanvasGrid {
 
             // Concat line
             this.gcode.push.apply(this.gcode, gcode)
-
-            // Call progress callback
-            this._onProgress({ gcode, percent: Math.round((y / h) * 100) })
         }
 
         let processNextLine = () => {
@@ -468,7 +475,7 @@ class RasterToGcode extends CanvasGrid {
 
             if (y < h) {
                 if (this.nonBlocking) {
-                    setTimeout(processNextLine, 0)
+                    setTimeout(processNextLine, 1)
                 }
                 else {
                     processNextLine()
@@ -550,9 +557,19 @@ class RasterToGcode extends CanvasGrid {
             }
         }
 
+        let percent     = 0
+        let lastPercent = 0
+
         let processCurrentLine = () => {
             // Process pixels line
             gcode = this._processCurrentLine(reversed)
+
+            // Call progress callback
+            percent = Math.round((lineNum / totalLines) * 100)
+            if (percent > lastPercent) {
+                this._onProgress({ gcode, percent })
+            }
+            lastPercent = percent
 
             // Skip empty gcode line
             if (! gcode) {
@@ -564,9 +581,6 @@ class RasterToGcode extends CanvasGrid {
 
             // Concat line
             this.gcode.push.apply(this.gcode, gcode)
-
-            // Call progress callback
-            this._onProgress({ gcode, percent: Math.round((lineNum / totalLines) * 100) })
         }
 
         let processNextLine = () => {
@@ -583,7 +597,7 @@ class RasterToGcode extends CanvasGrid {
 
             if (y < h && x < w) {
                 if (this.nonBlocking) {
-                    setTimeout(processNextLine, 0)
+                    setTimeout(processNextLine, 1)
                 }
                 else {
                     processNextLine()
