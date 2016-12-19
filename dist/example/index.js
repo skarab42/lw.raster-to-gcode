@@ -20,6 +20,10 @@ var settings = {
     verboseG : false,          // Output verbose GCode (print each commands)
     diagonal : false,          // Go diagonally (increase the distance between points)
 
+    precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
+
+    nonBlocking: true, // Use setTimeout to avoid blocking the UI
+
     filters: {
         smoothing   : 0,      // Smoothing the input image ?
         brightness  : 0,      // Image brightness [-255 to +255]

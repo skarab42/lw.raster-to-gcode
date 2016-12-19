@@ -23,6 +23,8 @@ class RasterToGcode extends CanvasGrid {
 
             precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
 
+            nonBlocking: true, // Use setTimeout to avoid blocking the UI
+
             filters: {
                 smoothing   : 0,      // Smoothing the input image ?
                 brightness  : 0,      // Image brightness [-255 to +255]
@@ -87,11 +89,15 @@ class RasterToGcode extends CanvasGrid {
     }
 
     // Process image and return gcode string
-    run() {
+    run(progress, done) {
         // Reset state
         this.gcode        = []
         this.lastCommands = {}
         this.currentLine  = null
+
+        // register user callbacks
+        progress && this.on('progress', progress)
+        done && this.on('done', done)
 
         // Add gcode header
         this._addHeader()
@@ -104,11 +110,9 @@ class RasterToGcode extends CanvasGrid {
             this._scanHorizontally()
         }
 
-        // Post scan done
-        this._onDone({ gcode: this.gcode })
-
-        // Return gcode array
-        return this.gcode
+        if (! this.nonBlocking) {
+            return this.gcode
+        }
     }
 
     _addHeader() {
@@ -124,7 +128,7 @@ class RasterToGcode extends CanvasGrid {
         )
 
         // Print activated options
-        var options = ['smoothing', 'trimLine', 'joinPixel', 'burnWhite', 'verboseG', 'diagonal']
+        let options = ['smoothing', 'trimLine', 'joinPixel', 'burnWhite', 'verboseG', 'diagonal']
 
         for (var i = options.length - 1; i >= 0; i--) {
             if (! this[options[i]]) {
@@ -156,8 +160,8 @@ class RasterToGcode extends CanvasGrid {
         // If the value argument is an object
         if (typeof value === 'object') {
             // Computed commands line
-            var commands = Array.prototype.slice.call(arguments)
-            var command, line = []
+            let commands = Array.prototype.slice.call(arguments)
+            let command, line = []
 
             // for each command
             for (var i = 0, il = commands.length; i < il; i++) {
@@ -205,7 +209,7 @@ class RasterToGcode extends CanvasGrid {
     // Get a point from the current line with real world coordinates
     _getPoint(index) {
         // Get the point object from the current line
-        var point = this.currentLine[index]
+        let point = this.currentLine[index]
 
         // No point
         if (! point) {
@@ -253,7 +257,7 @@ class RasterToGcode extends CanvasGrid {
     // Remove all trailing white spaces from the current line
     _trimCurrentLine() {
         // Remove white spaces from the left
-        var point = this.currentLine[0]
+        let point = this.currentLine[0]
 
         while (point && ! point.p) {
             this.currentLine.shift()
@@ -280,10 +284,10 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Extract all points exept the first one
-        var points = this.currentLine.splice(1)
+        let points = this.currentLine.splice(1)
 
         // Get current power
-        var power = this.currentLine[0].p
+        let power = this.currentLine[0].p
 
         // For each extracted point
         for (var point, i = 0, il = points.length - 1; i < il; i++) {
@@ -306,11 +310,11 @@ class RasterToGcode extends CanvasGrid {
     // Add extra white pixels at the ends
     _overscanCurrentLine(reversed) {
         // Number of pixels to add on each side
-        var pixels = this.overscan / this.ppm
+        let pixels = this.overscan / this.ppm
 
         // Get first/last point
-        var firstPoint = this.currentLine[0]
-        var lastPoint  = this.currentLine[this.currentLine.length - 1]
+        let firstPoint = this.currentLine[0]
+        let lastPoint  = this.currentLine[this.currentLine.length - 1]
 
         // Is last white/colored point ?
         firstPoint.s && (firstPoint.lastWhite  = true)
@@ -320,8 +324,8 @@ class RasterToGcode extends CanvasGrid {
         reversed ? (lastPoint.s = 0) : (firstPoint.s = 0)
 
         // Create left/right points
-        var rightPoint = { x: lastPoint.x + pixels , y: lastPoint.y , s: 0, p: 0 }
-        var leftPoint  = { x: firstPoint.x - pixels, y: firstPoint.y, s: 0, p: 0 }
+        let rightPoint = { x: lastPoint.x + pixels , y: lastPoint.y , s: 0, p: 0 }
+        let leftPoint  = { x: firstPoint.x - pixels, y: firstPoint.y, s: 0, p: 0 }
 
         if (this.diagonal) {
             leftPoint.y  += pixels
@@ -361,10 +365,10 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Point index
-        var point, index = 0
+        let point, index = 0
 
         // Init loop vars...
-        var command, gcode = []
+        let command, gcode = []
 
         // Get first point
         point = this._getPoint(index)
@@ -395,13 +399,14 @@ class RasterToGcode extends CanvasGrid {
     // Parse horizontally
     _scanHorizontally() {
         // Init loop vars
-        var x, y, s, p, point, gcode
-        var w = this.size.width
-        var h = this.size.height
+        let x = 0, y = 0
+        let s, p, point, gcode
+        let w = this.size.width
+        let h = this.size.height
 
-        var reversed    = false
-        var lastWhite   = false
-        var lastColored = false
+        let reversed    = false
+        let lastWhite   = false
+        let lastColored = false
 
         let computeCurrentLine = () => {
             // Reset current line
@@ -436,17 +441,13 @@ class RasterToGcode extends CanvasGrid {
             }
         }
 
-        // For each image line
-        for (y = 0; y < h; y++) {
-            // Compute current line
-            computeCurrentLine()
-
+        let processCurrentLine = () => {
             // Process pixels line
             gcode = this._processCurrentLine(reversed)
 
             // Skip empty gcode line
             if (! gcode) {
-                continue
+                return
             }
 
             // Toggle line state
@@ -458,21 +459,47 @@ class RasterToGcode extends CanvasGrid {
             // Call progress callback
             this._onProgress({ gcode, percent: Math.round((y / h) * 100) })
         }
+
+        let processNextLine = () => {
+            computeCurrentLine()
+            processCurrentLine()
+
+            y++
+
+            if (y < h) {
+                if (this.nonBlocking) {
+                    setTimeout(processNextLine, 0)
+                }
+                else {
+                    processNextLine()
+                }
+            }
+            else {
+                this._onDone({ gcode: this.gcode })
+            }
+        }
+
+        processNextLine()
+
+        // // For each image line
+        // for (y = 0; y < h; y++) {
+        //     processNextLine()
+        // }
     }
 
     // Parse diagonally
     _scanDiagonally() {
         // Init loop vars
-        var x = 0, y = 0
-        var s, p, point, gcode
-        var w = this.size.width
-        var h = this.size.height
+        let x = 0, y = 0
+        let s, p, point, gcode
+        let w = this.size.width
+        let h = this.size.height
 
-        var totalLines  = w + h - 1
-        var lineNum     = 0
-        var reversed    = false
-        var lastWhite   = false
-        var lastColored = false
+        let totalLines  = w + h - 1
+        let lineNum     = 0
+        let reversed    = false
+        let lastWhite   = false
+        let lastColored = false
 
         let computeCurrentLine = (x, y) => {
             // Reset current line
@@ -523,10 +550,7 @@ class RasterToGcode extends CanvasGrid {
             }
         }
 
-        let scanDiagonalLine = (x, y) => {
-            // Compute current line
-            computeCurrentLine(x, y)
-
+        let processCurrentLine = () => {
             // Process pixels line
             gcode = this._processCurrentLine(reversed)
 
@@ -545,15 +569,42 @@ class RasterToGcode extends CanvasGrid {
             this._onProgress({ gcode, percent: Math.round((lineNum / totalLines) * 100) })
         }
 
-        // For each image line
-        for (y = 0; y < h; y++) {
-            scanDiagonalLine(x, y)
+        let processNextLine = () => {
+            computeCurrentLine(x, y)
+            processCurrentLine()
+
+            if (! x) y++
+            else x++
+
+            if (y === h) {
+                x++
+                y--
+            }
+
+            if (y < h && x < w) {
+                if (this.nonBlocking) {
+                    setTimeout(processNextLine, 0)
+                }
+                else {
+                    processNextLine()
+                }
+            }
+            else {
+                this._onDone({ gcode: this.gcode })
+            }
         }
 
-        // For each image column (exept the first one)
-        for (x = 1, y--; x < w; x++) {
-            scanDiagonalLine(x, y)
-        }
+        processNextLine()
+
+        // // For each image line
+        // for (y = 0; y < h; y++) {
+        //     scanDiagonalLine(x, y)
+        // }
+        //
+        // // For each image column (exept the first one)
+        // for (x = 1, y--; x < w; x++) {
+        //     scanDiagonalLine(x, y)
+        // }
     }
 
     _onProgress(event) {
