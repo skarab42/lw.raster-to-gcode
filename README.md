@@ -1,11 +1,5 @@
 # lw.raster-to-gcode
-Canvas grid for [LaserWeb/CNCWeb](https://github.com/LaserWeb/LaserWeb4).
-
-# Canvas size limitation
-Due to limitation of the size of the `<canvas>` element by some browser, obtaining information about pixels of a very large bitmap was impossible with a single canvas.
-This library tries to overcome this limitation by loading an image in a grid of canvas.
-
-Reference: http://stackoverflow.com/questions/6081483/maximum-size-of-a-canvas-element
+Raster to G-Code for [LaserWeb/CNCWeb](https://github.com/LaserWeb/LaserWeb4).
 
 ## Demo
 https://lautr3k.github.io/lw.raster-to-gcode/dist/example/
@@ -34,16 +28,39 @@ Or download the last build from https://raw.githubusercontent.com/lautr3k/lw.ras
 ## Settings
 ```javascript
 let settings = {
-    scaleRatio: 1,    // Scaling ratio
-    cellSize  : 2048, // Canvas max size (width and height)
-    filters   : {
-        smoothing   : false,  // Smoothing the input image ?
+    ppi: 254, // Pixel Per Inch (25.4 ppi == 1 ppm)
+
+    beamSize : 0.1,                  // Beam size in millimeters
+    beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
+    beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
+    feedRate : 1500,                 // Feed rate in mm/min (F value)
+    feedUnit : 'mm/min',             // Feed rate unit [mm/min, mm/sec]
+
+    offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
+    trimLine : true,           // Trim trailing white pixels
+    joinPixel: true,           // Join consecutive pixels with same intensity
+    burnWhite: true,           // [true = G1 S0 | false = G0] on inner white pixels
+    verboseG : false,          // Output verbose GCode (print each commands)
+    diagonal : false,          // Go diagonally (increase the distance between points)
+
+    precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
+
+    nonBlocking: true, // Use setTimeout to avoid blocking the UI
+
+    filters: {
+        smoothing   : 0,      // Smoothing the input image ?
         brightness  : 0,      // Image brightness [-255 to +255]
         contrast    : 0,      // Image contrast [-255 to +255]
         gamma       : 0,      // Image gamma correction [0.01 to 7.99]
         grayscale   : 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
         shadesOfGray: 256     // Number of shades of gray [2-256]
-    }
+    },
+
+    progress       : null, // On progress callbacks
+    progressContext: null, // On progress callback context
+
+    done       : null, // On done callback
+    doneContext: null  // On done callback context
 }
 ```
 
@@ -51,26 +68,21 @@ let settings = {
 ```javascript
 import RasterToGcode from 'lw.raster-to-gcode'
 
+// Create RasterToGcode object
 let rasterToGcode = new RasterToGcode(settings)
 
-// <file> can be Image, File, URL object or URL string (http://* or data:image/*)
-rasterToGcode.load(file).then(function(cg) {
-    console.log('rasterToGcode:', cg);
+// Register events callbacks
+rasterToGcode.on('progress', function(event) {
+    console.log('onProgress:', event); // event = { gcode, percent }
+})
+.on('done', function(event) {
+    console.log('onDone:', event); // event = { gcode }
+});
 
-    // Get pixel data
-    let pixelData = cg.getPixel(x, y);
-
-    // pixelData {
-    //     color : { r, g, b, a },
-    //     gray  : int[0-255],
-    //     grid  : { col, row },
-    //     coords: { x, y }
-    // }
-
-    console.log(cg.size)  // { width, height, cols, rows }
-    console.log(cg.file)  // File object
-    console.log(cg.image) // Image object
-    console.log(cg.url)   // URL object
+// <file> can be Image, File URL object or URL string (http://* or data:image/*)
+rasterToGcode.load(file).then(function(rtg) {
+    console.log('rasterToGcode:', rtg); // rtg === rasterToGcode
+    rasterToGcode.run(); // Return gcode array if nonBlocking = false
 })
 .catch(function(error) {
     console.error('error:', error);
