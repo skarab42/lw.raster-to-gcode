@@ -628,11 +628,11 @@ class RasterToGcode extends CanvasGrid {
     }
 
     _onProgress(event) {
-        console.log('progress:', event.percent);
+        //console.log('progress:', event.percent);
     }
 
     _onDone(event) {
-        console.log('done:', event.gcode.length);
+        //console.log('done:', event.gcode.length);
     }
 
     on(event, callback, context) {
