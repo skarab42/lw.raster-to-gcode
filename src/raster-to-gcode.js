@@ -475,7 +475,7 @@ class RasterToGcode extends CanvasGrid {
 
             if (y < h) {
                 if (this.nonBlocking) {
-                    setTimeout(processNextLine, 1)
+                    setTimeout(processNextLine, 0)
                 }
                 else {
                     processNextLine()
@@ -597,7 +597,7 @@ class RasterToGcode extends CanvasGrid {
 
             if (y < h && x < w) {
                 if (this.nonBlocking) {
-                    setTimeout(processNextLine, 1)
+                    setTimeout(processNextLine, 0)
                 }
                 else {
                     processNextLine()
