@@ -474,7 +474,7 @@ class RasterToGcode extends CanvasGrid {
         var lastWhite   = false
         var lastColored = false
 
-        let computeCurrentLine = () => {
+        let computeCurrentLine = (x, y) => {
             // Reset current line
             this.currentLine = []
 
@@ -525,7 +525,7 @@ class RasterToGcode extends CanvasGrid {
 
         let scanDiagonalLine = (x, y) => {
             // Compute current line
-            computeCurrentLine()
+            computeCurrentLine(x, y)
 
             // Process pixels line
             gcode = this._processCurrentLine(reversed)
