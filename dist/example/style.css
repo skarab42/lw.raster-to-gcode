@@ -42,6 +42,11 @@ input {
     display: none;
 }
 
+.progress {
+    display: none;
+    margin: 5px 0;
+}
+
 #canvasWrapper {
     z-index: 100;
     overflow: auto;

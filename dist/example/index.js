@@ -45,10 +45,12 @@ function loadFile() {
     // Register events callbacks
     rasterToGcode.on('progress', function(event) {
         console.log('onProgress:', event.percent);
+        $progressBar.css('width', event.percent + '%').html(event.percent + '%');
     })
     .on('done', function(event) {
         console.log('onDone: lines:', event.gcode.length);
         gcode = event.gcode.join('\n');
+        $progressBar.parent().hide();
         $downloadGCode.show();
     });
 
@@ -65,6 +67,7 @@ function loadFile() {
 // To gcode
 function toGCode() {
     console.log('toGCode:', file.name);
+    $progressBar.parent().show();
     rasterToGcode.run();
 }
 
@@ -94,6 +97,8 @@ var $imageSize     = $('#imageSize');
 var $pixelRGBA   = $pixel.find('.rgba');
 var $pixelColor  = $pixel.find('.color');
 var $pixelCoords = $pixel.find('.coords');
+
+$progressBar = $('.progress-bar');
 
 function drawCanvasGrid(cg) {
     //console.info('onCanvas:', canvas);
