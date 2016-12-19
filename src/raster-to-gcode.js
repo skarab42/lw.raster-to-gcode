@@ -68,6 +68,10 @@ class RasterToGcode extends CanvasGrid {
         if (this.feedUnit === 'mm/sec') {
             this.feedRate *= 60
         }
+
+        // register user callbacks
+        this.progress && this.on('progress', this.progress, this.progressContext)
+        this.done && this.on('done', this.done, this.doneContext)
     }
 
     // Process image
@@ -101,10 +105,10 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Post scan done
-        console.log('DONE!');
+        this._onDone({ gcode: this.gcode })
 
-        // Return gcode string
-        return this.gcode.join('\n')
+        // Return gcode array
+        return this.gcode
     }
 
     _addHeader() {
@@ -399,8 +403,7 @@ class RasterToGcode extends CanvasGrid {
         var lastWhite   = false
         var lastColored = false
 
-        // For each image line
-        for (y = 0; y < h; y++) {
+        let computeCurrentLine = () => {
             // Reset current line
             this.currentLine = []
 
@@ -431,6 +434,12 @@ class RasterToGcode extends CanvasGrid {
                 // Add point to current line
                 this.currentLine.push(point)
             }
+        }
+
+        // For each image line
+        for (y = 0; y < h; y++) {
+            // Compute current line
+            computeCurrentLine()
 
             // Process pixels line
             gcode = this._processCurrentLine(reversed)
@@ -446,11 +455,8 @@ class RasterToGcode extends CanvasGrid {
             // Concat line
             this.gcode.push.apply(this.gcode, gcode)
 
-            // Post the gcode pixels line (only if not empty)
-            // postMessage({ type: 'gcode', data: {
-            //     percent: Math.round((y / h) * 100),
-            //     text   : gcode.join('\n')
-            // }})
+            // Call progress callback
+            this._onProgress({ gcode, percent: Math.round((y / h) * 100) })
         }
     }
 
@@ -468,7 +474,7 @@ class RasterToGcode extends CanvasGrid {
         var lastWhite   = false
         var lastColored = false
 
-        let scanDiagonalLine = (x, y) => {
+        let computeCurrentLine = () => {
             // Reset current line
             this.currentLine = []
 
@@ -515,6 +521,11 @@ class RasterToGcode extends CanvasGrid {
                 x++
                 y--
             }
+        }
+
+        let scanDiagonalLine = (x, y) => {
+            // Compute current line
+            computeCurrentLine()
 
             // Process pixels line
             gcode = this._processCurrentLine(reversed)
@@ -530,11 +541,8 @@ class RasterToGcode extends CanvasGrid {
             // Concat line
             this.gcode.push.apply(this.gcode, gcode)
 
-            // // Post the gcode pixels line (only if not empty)
-            // postMessage({ type: 'gcode', data: {
-            //     percent: Math.round((lineNum / totalLines) * 100),
-            //     text   : gcode.join('\n')
-            // }})
+            // Call progress callback
+            this._onProgress({ gcode, percent: Math.round((lineNum / totalLines) * 100) })
         }
 
         // For each image line
@@ -546,6 +554,26 @@ class RasterToGcode extends CanvasGrid {
         for (x = 1, y--; x < w; x++) {
             scanDiagonalLine(x, y)
         }
+    }
+
+    _onProgress(event) {
+        console.log('progress:', event.percent);
+    }
+
+    _onDone(event) {
+        console.log('done:', event.gcode.length);
+    }
+
+    on(event, callback, context) {
+        let method = '_on' + event[0].toUpperCase() + event.slice(1)
+
+        if (! this[method] || typeof this[method] !== 'function') {
+            throw new Error('Undefined event: ' + event)
+        }
+
+        this[method] = event => callback.call(context || this, event)
+
+        return this
     }
 }
 

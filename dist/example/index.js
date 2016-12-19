@@ -38,6 +38,16 @@ function loadFile() {
     // Create RasterToGcode object
     rasterToGcode = new RasterToGcode.RasterToGcode(settings);
 
+    // Register events callbacks
+    rasterToGcode.on('progress', function(event) {
+        console.log('onProgress:', event.percent);
+    })
+    .on('done', function(event) {
+        console.log('onDone: lines:', event.gcode.length);
+        gcode = event.gcode.join('\n');
+        $downloadGCode.show();
+    });
+
     // <file> can be Image, File URL object or URL string (http://* or data:image/*)
     rasterToGcode.load(file).then(function(rtg) {
         console.log('rasterToGcode:', rtg);
@@ -51,11 +61,10 @@ function loadFile() {
 // To gcode
 function toGCode() {
     console.log('toGCode:', file.name);
-    gcode = rasterToGcode.run();
-    $downloadGCode.show();
+    rasterToGcode.run();
 }
 
-// To gcode
+// Download gcode
 function downloadGCode() {
     console.log('downloadGCode:', file.name);
     var gCodeFile = new Blob([gcode], { type: 'text/plain;charset=utf-8' });
