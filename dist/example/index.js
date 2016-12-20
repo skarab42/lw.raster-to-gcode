@@ -2,7 +2,7 @@
 var debug = true;
 
 // Defaults settings
-var file, gcode, rasterToGcode;
+var file, gcode, heightMap, rasterToGcode;
 
 var settings = {
     ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
@@ -44,6 +44,7 @@ var settings = {
 function loadFile() {
     console.log('file:', file);
     $downloadGCode.hide();
+    $downloadHeightMap.hide();
 
     // Create RasterToGcode object
     rasterToGcode = new RasterToGcode.RasterToGcode(settings);
@@ -84,21 +85,49 @@ function downloadGCode() {
     saveAs(gCodeFile, file.name + '.gcode');
 }
 
+// To height-map
+function toHeightMap() {
+    console.log('toHeightMap:', file.name);
+    heightMap = [];
+    $progressBar.parent().show();
+    rasterToGcode.getHeightMap({
+        progress: function(event) {
+            console.log('onProgress:', event.percent);
+            $progressBar.css('width', event.percent + '%').html(event.percent + '%');
+            heightMap.push(event.pixels.join(','));
+        },
+        done: function(event) {
+            heightMap = heightMap.join('\n');
+            $progressBar.parent().hide();
+            $downloadHeightMap.show();
+        }
+    });
+}
+
+// Download height-map
+function downloadHeightMap() {
+    console.log('downloadHeightMap:', file.name);
+    var heightMapFile = new Blob([heightMap], { type: 'text/plain;charset=utf-8' });
+    saveAs(heightMapFile, file.name + '.height-map.txt');
+}
+
 // UI --------------------------------------------------------------------------
 
-var $canvasWrapper = $('#canvasWrapper');
-var $fileName      = $('#fileName');
-var $fileSize      = $('#fileSize');
-var $noFile        = $('.noFile');
-var $hasFile       = $('.hasFile');
-var $file          = $('#file');
-var $pixel         = $('#pixel');
-var $filters       = $('.filters');
-var $settings      = $('.settings');
-var $ppm           = $('#ppm');
-var $toGCode       = $('#toGCode');
-var $downloadGCode = $('#downloadGCode');
-var $imageSize     = $('#imageSize');
+var $canvasWrapper     = $('#canvasWrapper');
+var $fileName          = $('#fileName');
+var $fileSize          = $('#fileSize');
+var $noFile            = $('.noFile');
+var $hasFile           = $('.hasFile');
+var $file              = $('#file');
+var $pixel             = $('#pixel');
+var $filters           = $('.filters');
+var $settings          = $('.settings');
+var $ppm               = $('#ppm');
+var $toGCode           = $('#toGCode');
+var $toHeightMap       = $('#toHeightMap');
+var $downloadGCode     = $('#downloadGCode');
+var $downloadHeightMap = $('#downloadHeightMap');
+var $imageSize         = $('#imageSize');
 
 var $pixelRGBA   = $pixel.find('.rgba');
 var $pixelColor  = $pixel.find('.color');
@@ -140,7 +169,9 @@ $(document).ready(function() {
 
     // To gcode !
     $toGCode.on('click', toGCode);
+    $toHeightMap.on('click', toHeightMap);
     $downloadGCode.on('click', downloadGCode);
+    $downloadHeightMap.on('click', downloadHeightMap);
 
     // On mouse move
     $(document).on('mousemove', function(event) {

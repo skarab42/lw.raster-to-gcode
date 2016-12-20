@@ -107,28 +107,37 @@ class RasterToGcode extends CanvasGrid {
     }
 
     // Process image and return gcode string
-    run(progress, done) {
+    run(settings) {
         // Reset state
         this.gcode        = []
         this.lastCommands = {}
         this.currentLine  = null
 
+        // Defaults settings
+        settings = settings || {}
+
         // register user callbacks
-        progress && this.on('progress', progress)
-        done && this.on('done', done)
+        settings.progress && this.on('progress', settings.progress, settings.progressContext)
+        settings.done && this.on('done', settings.done, settings.doneContext)
+
+        let nonBlocking = this.nonBlocking
+
+        if (settings.nonBlocking !== undefined) {
+            nonBlocking = settings.nonBlocking
+        }
 
         // Add gcode header
         this._addHeader()
 
         // Scan type ?
         if (this.diagonal) {
-            this._scanDiagonally()
+            this._scanDiagonally(nonBlocking)
         }
         else {
-            this._scanHorizontally()
+            this._scanHorizontally(nonBlocking)
         }
 
-        if (! this.nonBlocking) {
+        if (! nonBlocking) {
             return this.gcode
         }
     }
@@ -416,7 +425,7 @@ class RasterToGcode extends CanvasGrid {
     }
 
     // Parse horizontally
-    _scanHorizontally() {
+    _scanHorizontally(nonBlocking) {
         // Init loop vars
         let x = 0, y = 0
         let s, p, point, gcode
@@ -493,7 +502,7 @@ class RasterToGcode extends CanvasGrid {
             y++
 
             if (y < h) {
-                if (this.nonBlocking) {
+                if (nonBlocking) {
                     setTimeout(processNextLine, 0)
                 }
                 else {
@@ -514,7 +523,7 @@ class RasterToGcode extends CanvasGrid {
     }
 
     // Parse diagonally
-    _scanDiagonally() {
+    _scanDiagonally(nonBlocking) {
         // Init loop vars
         let x = 0, y = 0
         let s, p, point, gcode
@@ -615,7 +624,7 @@ class RasterToGcode extends CanvasGrid {
             }
 
             if (y < h && x < w) {
-                if (this.nonBlocking) {
+                if (nonBlocking) {
                     setTimeout(processNextLine, 0)
                 }
                 else {
@@ -658,6 +667,79 @@ class RasterToGcode extends CanvasGrid {
         this[method] = event => callback.call(context || this, event)
 
         return this
+    }
+
+    // Return the bitmap height-map
+    getHeightMap(settings) {
+        // Init loop vars{
+        let heightMap = []
+        let x = 0
+        let y = 0
+        let w = this.size.width
+        let h = this.size.height
+
+        let percent     = 0
+        let lastPercent = 0
+
+        // Defaults settings
+        settings = settings || {}
+
+        // register user callbacks
+        let onProgress = settings.progress || function() {}
+        let onDone     = settings.done     || function() {}
+
+        // Non blocking mode ?
+        let nonBlocking = this.nonBlocking
+
+        if (settings.nonBlocking !== undefined) {
+            nonBlocking = settings.nonBlocking
+        }
+
+        let computeCurrentLine = () => {
+            // Reset current line
+            let pixels = []
+
+            // For each pixel on the line
+            for (x = 0; x < w; x++) {
+                pixels.push(this._mapPixelPower(this._getPixelPower(x, y)))
+            }
+
+            // Call progress callback
+            percent = Math.round((y / h) * 100)
+
+            if (percent > lastPercent) {
+                onProgress.call(settings.progressContext || this, { pixels, percent })
+            }
+
+            lastPercent = percent
+
+            // Add pixels line
+            heightMap.push(pixels)
+        }
+
+        let processNextLine = () => {
+            computeCurrentLine()
+
+            y++
+
+            if (y < h) {
+                if (nonBlocking) {
+                    setTimeout(processNextLine, 0)
+                }
+                else {
+                    processNextLine()
+                }
+            }
+            else {
+                onDone.call(settings.doneContext || this, { heightMap })
+            }
+        }
+
+        processNextLine()
+
+        if (! nonBlocking) {
+            return heightMap
+        }
     }
 }
 

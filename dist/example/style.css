@@ -38,7 +38,7 @@ input {
     display: block;
 }
 
-.hasFile, .hasGCode {
+.hasFile, .hasGCode, .hasHeightMap {
     display: none;
 }
 
