@@ -206,27 +206,36 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	    }, {
 	        key: 'run',
-	        value: function run(progress, done) {
+	        value: function run(settings) {
 	            // Reset state
 	            this.gcode = [];
 	            this.lastCommands = {};
 	            this.currentLine = null;
 	
+	            // Defaults settings
+	            settings = settings || {};
+	
 	            // register user callbacks
-	            progress && this.on('progress', progress);
-	            done && this.on('done', done);
+	            settings.progress && this.on('progress', settings.progress, settings.progressContext);
+	            settings.done && this.on('done', settings.done, settings.doneContext);
+	
+	            var nonBlocking = this.nonBlocking;
+	
+	            if (settings.nonBlocking !== undefined) {
+	                nonBlocking = settings.nonBlocking;
+	            }
 	
 	            // Add gcode header
 	            this._addHeader();
 	
 	            // Scan type ?
 	            if (this.diagonal) {
-	                this._scanDiagonally();
+	                this._scanDiagonally(nonBlocking);
 	            } else {
-	                this._scanHorizontally();
+	                this._scanHorizontally(nonBlocking);
 	            }
 	
-	            if (!this.nonBlocking) {
+	            if (!nonBlocking) {
 	                return this.gcode;
 	            }
 	        }
@@ -526,7 +535,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	    }, {
 	        key: '_scanHorizontally',
-	        value: function _scanHorizontally() {
+	        value: function _scanHorizontally(nonBlocking) {
 	            var _this2 = this;
 	
 	            // Init loop vars
@@ -609,7 +618,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                y++;
 	
 	                if (y < h) {
-	                    if (_this2.nonBlocking) {
+	                    if (nonBlocking) {
 	                        setTimeout(processNextLine, 0);
 	                    } else {
 	                        processNextLine();
@@ -631,7 +640,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	    }, {
 	        key: '_scanDiagonally',
-	        value: function _scanDiagonally() {
+	        value: function _scanDiagonally(nonBlocking) {
 	            var _this3 = this;
 	
 	            // Init loop vars
@@ -737,7 +746,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                }
 	
 	                if (y < h && x < w) {
-	                    if (_this3.nonBlocking) {
+	                    if (nonBlocking) {
 	                        setTimeout(processNextLine, 0);
 	                    } else {
 	                        processNextLine();
@@ -785,6 +794,82 @@ return /******/ (function(modules) { // webpackBootstrap
 	            };
 	
 	            return this;
+	        }
+	
+	        // Return the bitmap height-map
+	
+	    }, {
+	        key: 'getHeightMap',
+	        value: function getHeightMap(settings) {
+	            var _this5 = this;
+	
+	            // Init loop vars{
+	            var heightMap = [];
+	            var x = 0;
+	            var y = 0;
+	            var w = this.size.width;
+	            var h = this.size.height;
+	
+	            var percent = 0;
+	            var lastPercent = 0;
+	
+	            // Defaults settings
+	            settings = settings || {};
+	
+	            // register user callbacks
+	            var onProgress = settings.progress || function () {};
+	            var onDone = settings.done || function () {};
+	
+	            // Non blocking mode ?
+	            var nonBlocking = this.nonBlocking;
+	
+	            if (settings.nonBlocking !== undefined) {
+	                nonBlocking = settings.nonBlocking;
+	            }
+	
+	            var computeCurrentLine = function computeCurrentLine() {
+	                // Reset current line
+	                var pixels = [];
+	
+	                // For each pixel on the line
+	                for (x = 0; x < w; x++) {
+	                    pixels.push(_this5._mapPixelPower(_this5._getPixelPower(x, y)));
+	                }
+	
+	                // Call progress callback
+	                percent = Math.round(y / h * 100);
+	
+	                if (percent > lastPercent) {
+	                    onProgress.call(settings.progressContext || _this5, { pixels: pixels, percent: percent });
+	                }
+	
+	                lastPercent = percent;
+	
+	                // Add pixels line
+	                heightMap.push(pixels);
+	            };
+	
+	            var processNextLine = function processNextLine() {
+	                computeCurrentLine();
+	
+	                y++;
+	
+	                if (y < h) {
+	                    if (nonBlocking) {
+	                        setTimeout(processNextLine, 0);
+	                    } else {
+	                        processNextLine();
+	                    }
+	                } else {
+	                    onDone.call(settings.doneContext || _this5, { heightMap: heightMap });
+	                }
+	            };
+	
+	            processNextLine();
+	
+	            if (!nonBlocking) {
+	                return heightMap;
+	            }
 	        }
 	    }]);
 	
