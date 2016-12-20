@@ -5,6 +5,7 @@
   "main": "./dist/lw.raster-to-gcode.js",
   "scripts": {
     "start": "webpack-dev-server --progress --colors",
+    "build": "npm run build-dev && npm run build-prod",
     "build-prod": "webpack -p --progress --colors",
     "build-dev": "webpack --progress --colors"
   },
