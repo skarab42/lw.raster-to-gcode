@@ -5,7 +5,7 @@ var debug = true;
 var file, gcode, rasterToGcode;
 
 var settings = {
-    ppi: 254, // Pixel Per Inch (25.4 ppi == 1 ppm)
+    ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
     beamSize : 0.1,                  // Beam size in millimeters
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
@@ -112,7 +112,7 @@ function drawCanvasGrid(cg) {
     $fileName.html(cg.file.name);
     $fileSize.html(cg.size.width + ' x ' + cg.size.height);
     $imageSize.html(cg.outputSize.width + ' x ' + cg.outputSize.height);
-    $ppm.html(cg.ppm);
+    $ppm.html(cg.ppm.x + ' - ' + cg.ppm.y);
     $hasFile.show();
     $noFile.hide();
 

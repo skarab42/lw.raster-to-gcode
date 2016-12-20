@@ -28,7 +28,7 @@ Or download the last build from https://raw.githubusercontent.com/lautr3k/lw.ras
 ## Settings
 ```javascript
 let settings = {
-    ppi: 254, // Pixel Per Inch (25.4 ppi == 1 ppm)
+    ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
     beamSize : 0.1,                  // Beam size in millimeters
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
