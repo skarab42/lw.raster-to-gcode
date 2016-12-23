@@ -19,6 +19,7 @@ var settings = {
     burnWhite: true,           // [true = G1 S0 | false = G0] on inner white pixels
     verboseG : false,          // Output verbose GCode (print each commands)
     diagonal : false,          // Go diagonally (increase the distance between points)
+    overscan : 0,              // Add some extra white space (in millimeters) before and after each line
 
     precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
 
@@ -38,10 +39,46 @@ var settings = {
 
     done       : null, // On done callback
     doneContext: null  // On done callback context
+};
+
+function loadSettings() {
+    var store = JSON.parse(localStorage.getItem('lw.raster-to-gcode'));
+
+    if (store) { settings = store; }
+
+    $settings.find('select, input').each(function() {
+        var keys    = this.id.split('-');
+        var mainKey = keys.shift();
+        var subKey  = keys.shift();
+
+        var value = settings[mainKey];
+
+        if (subKey) {
+            value = value[subKey];
+        }
+
+        if (this.type === 'checkbox') {
+            $(this).prop('checked', value);
+        }
+        else {
+            $(this).val(value);
+        }
+    });
+
+    $filters.find('select, input').each(function() {
+        $(this).val(settings.filters[this.id]);
+    });
+}
+
+function saveSettings() {
+    localStorage.setItem('lw.raster-to-gcode', JSON.stringify(settings));
 }
 
 // Load file...
 function loadFile() {
+    // Save settings
+    saveSettings();
+
     console.log('file:', file);
     $downloadGCode.hide();
     $downloadHeightMap.hide();
@@ -115,22 +152,15 @@ function downloadHeightMap() {
 
 // UI --------------------------------------------------------------------------
 
-var $canvasWrapper     = $('#canvasWrapper');
-var $fileName          = $('#fileName');
-var $fileSize          = $('#fileSize');
-var $noFile            = $('.noFile');
-var $hasFile           = $('.hasFile');
-var $file              = $('#file');
-var $pixel             = $('#pixel');
-var $filters           = $('.filters');
-var $settings          = $('.settings');
-var $ppm               = $('#ppm');
-var $toGCode           = $('#toGCode');
-var $toHeightMap       = $('#toHeightMap');
-var $downloadGCode     = $('#downloadGCode');
-var $downloadHeightMap = $('#downloadHeightMap');
-var $imageSize         = $('#imageSize');
-var $explorer          = $('#explorer');
+// Map all elements id
+$('*[id]').each(function() {
+    window['$' + this.id] = $(this);
+});
+
+var $noFile   = $('.noFile');
+var $hasFile  = $('.hasFile');
+var $filters  = $('.filters');
+var $settings = $('.settings');
 
 var $pixelRGBA   = $pixel.find('.rgba');
 var $pixelColor  = $pixel.find('.color');
@@ -162,6 +192,9 @@ function drawCanvasGrid(cg) {
 }
 
 $(document).ready(function() {
+    // Load stored settings
+    loadSettings();
+
     // On file input change
     $file.on('change', function(event) {
         file = event.target.files[0];
