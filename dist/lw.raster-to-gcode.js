@@ -110,6 +110,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            burnWhite: true, // [true = G1 S0 | false = G0] on inner white pixels
 	            verboseG: false, // Output verbose GCode (print each commands)
 	            diagonal: false, // Go diagonally (increase the distance between points)
+	            overscan: 0, // Add some extra white space (in millimeters) before and after each line
 	
 	            precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
 	
@@ -121,7 +122,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	                contrast: 0, // Image contrast [-255 to +255]
 	                gamma: 0, // Image gamma correction [0.01 to 7.99]
 	                grayscale: 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
-	                shadesOfGray: 256 // Number of shades of gray [2-256]
+	                shadesOfGray: 256, // Number of shades of gray [2-256]
+	                invertColor: false // Invert color...
 	            },
 	
 	            progress: null, // On progress callbacks
@@ -1317,6 +1319,14 @@ return /******/ (function(modules) { // webpackBootstrap
 			}
 			
 			// Filters ...
+			function invertColor(data, i, value) {
+			    if (value) {
+			        data[i] = color(255 - data[i]);
+			        data[i + 1] = color(255 - data[i + 1]);
+			        data[i + 2] = color(255 - data[i + 2]);
+			    }
+			}
+			
 			function brightness(data, i, value) {
 			    if (value !== undefined) {
 			        data[i] = color(data[i] + value);
@@ -1433,7 +1443,8 @@ return /******/ (function(modules) { // webpackBootstrap
 			        contrast: 0, // Image contrast [-255 to +255]
 			        gamma: 0, // Image gamma correction [0.01 to 7.99]
 			        grayscale: 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
-			        shadesOfGray: 256 // Number of shades of gray [2-256]
+			        shadesOfGray: 256, // Number of shades of gray [2-256]
+			        invertColor: false // Invert color...
 			    }, settings || {});
 			
 			    // Get canvas 2d context
@@ -1478,6 +1489,7 @@ return /******/ (function(modules) { // webpackBootstrap
 			    // For each pixel
 			    for (var i = 0, il = data.length; i < il; i += 4) {
 			        // Apply filters
+			        invertColor(data, i, settings.invertColor);
 			        brightness(data, i, brightnessOffset);
 			        contrast(data, i, contrastFactor);
 			        gamma(data, i, gammaCorrection);
