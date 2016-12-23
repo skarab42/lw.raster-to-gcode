@@ -53,7 +53,8 @@ let settings = {
         contrast    : 0,      // Image contrast [-255 to +255]
         gamma       : 0,      // Image gamma correction [0.01 to 7.99]
         grayscale   : 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
-        shadesOfGray: 256     // Number of shades of gray [2-256]
+        shadesOfGray: 256,    // Number of shades of gray [2-256]
+        invertColor : false   // Invert color...
     },
 
     progress       : null, // On progress callbacks
