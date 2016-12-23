@@ -60,7 +60,6 @@ input {
 
 #explorer {
     top: 15px;
-    left: 15px;
     bottom: 15px;
     padding: 10px;
     z-index: 1000;
@@ -69,6 +68,14 @@ input {
     border: 1px #ccc solid;
     border-radius: 6px;
     overflow-y: auto;
+}
+
+#explorer.left {
+    left: 15px;
+}
+
+#explorer.right {
+    right: 15px;
 }
 
 #explorer h3 {

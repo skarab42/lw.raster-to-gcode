@@ -64,6 +64,8 @@ function loadFile() {
     // <file> can be Image, File URL object or URL string (http://* or data:image/*)
     rasterToGcode.load(file).then(function(rtg) {
         console.log('rasterToGcode:', rtg);
+        $explorer.removeClass('left');
+        $explorer.addClass('right');
         drawCanvasGrid(rtg);
     })
     .catch(function(error) {
@@ -128,6 +130,7 @@ var $toHeightMap       = $('#toHeightMap');
 var $downloadGCode     = $('#downloadGCode');
 var $downloadHeightMap = $('#downloadHeightMap');
 var $imageSize         = $('#imageSize');
+var $explorer          = $('#explorer');
 
 var $pixelRGBA   = $pixel.find('.rgba');
 var $pixelColor  = $pixel.find('.color');
