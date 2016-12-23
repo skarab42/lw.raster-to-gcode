@@ -67,7 +67,14 @@ function loadSettings() {
     });
 
     $filters.find('select, input').each(function() {
-        $(this).val(settings.filters[this.id]);
+        var value = settings.filters[this.id];
+
+        if (this.type === 'checkbox') {
+            $(this).prop('checked', value);
+        }
+        else {
+            $(this).val(value);
+        }
     });
 }
 
@@ -286,6 +293,10 @@ $(document).ready(function() {
 
         if (this.id !== 'grayscale') {
             value = parseFloat(value);
+        }
+
+        if (this.type === 'checkbox') {
+            value = this.checked;
         }
 
         settings.filters[this.id] = value;
