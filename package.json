@@ -1,6 +1,6 @@
 {
   "name": "lw.raster-to-gcode",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Raster to GCode for LaserWeb",
   "main": "./dist/lw.raster-to-gcode.js",
   "scripts": {
