@@ -20,6 +20,7 @@ class RasterToGcode extends CanvasGrid {
             burnWhite: true,           // [true = G1 S0 | false = G0] on inner white pixels
             verboseG : false,          // Output verbose GCode (print each commands)
             diagonal : false,          // Go diagonally (increase the distance between points)
+            overscan : 0,              // Add some extra white space (in millimeters) before and after each line
 
             precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
 
