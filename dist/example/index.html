@@ -99,9 +99,16 @@
                     <span class="unit">mm</span>
                 </label>
                 <label>
-                    <span class="label">Feed rate    :</span>
-                    <input id="feedRate" type="number" min="1" max="100000" step="1" placeholder="1500" value="1500" /> -
-                    <select id="feedUnit">
+                    <span class="label">Rapid rate (G0):</span>
+                    <input id="rapidRate" type="number" min="1" max="100000" step="1" placeholder="1500" value="1500" />
+                </label>
+                <label>
+                    <span class="label">Feed rate (G1) :</span>
+                    <input id="feedRate" type="number" min="1" max="100000" step="1" placeholder="500" value="500" />
+                </label>
+                <label>
+                    <span class="label">Rate units     :</span>
+                    <select id="rateUnit">
                         <option>mm/min</option>
                         <option>mm/sec</option>
                     </select>

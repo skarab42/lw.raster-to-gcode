@@ -9,8 +9,9 @@ class RasterToGcode extends CanvasGrid {
             ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
             toolDiameter: 0.1,      // Tool diameter in millimeters
-            feedRate    : 1500,     // Feed rate in mm/min (F value)
-            feedUnit    : 'mm/min', // Feed rate unit [mm/min, mm/sec]
+            rapidRate   : 1500,     // Feed rate in mm/min (G0 F value)
+            feedRate    : 500,      // Feed rate in mm/min (G1 F value)
+            rateUnit    : 'mm/min', // Feed rate unit [mm/min, mm/sec]
 
             beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
             beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
@@ -105,8 +106,9 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Adjuste feed rate to mm/min
-        if (this.feedUnit === 'mm/sec') {
-            this.feedRate *= 60
+        if (this.rateUnit === 'mm/sec') {
+            this.feedRate  *= 60
+            this.rapidRate *= 60
         }
 
         // register user callbacks
@@ -170,10 +172,23 @@ class RasterToGcode extends CanvasGrid {
             '; PPI        : x: ' + this.ppi.x + ' - y: ' + this.ppi.y,
             '; PPM        : x: ' + this.ppm.x + ' - y: ' + this.ppm.y,
             '; Tool diam. : ' + this.toolDiameter + ' mm',
-            '; Beam range : ' + this.beamRange.min + ' to ' + this.beamRange.max,
-            '; Beam power : ' + this.beamPower.min + ' to ' + this.beamPower.max + ' %',
-            '; Feed rate  : ' + this.feedRate + ' mm/min'
+            '; Rapid rate : ' + this.rapidRate + ' ' + this.rateUnit,
+            '; Feed rate  : ' + this.feedRate + ' ' + this.rateUnit
         )
+
+        if (this.milling) {
+            this.gcode.push(
+                '; Z safe     : ' + this.zSafe,
+                '; Z surface  : ' + this.zSurface,
+                '; Z depth    : ' + this.zDepth
+            )
+        }
+        else {
+            this.gcode.push(
+                '; Beam range : ' + this.beamRange.min + ' to ' + this.beamRange.max,
+                '; Beam power : ' + this.beamPower.min + ' to ' + this.beamPower.max + ' %'
+            )
+        }
 
         // Print activated options
         let options = ['smoothing', 'trimLine', 'joinPixel', 'burnWhite', 'verboseG', 'diagonal']
@@ -191,7 +206,7 @@ class RasterToGcode extends CanvasGrid {
         // Set feed rates
         this.gcode.push(
             '',
-            'G0 F' + this.feedRate,
+            'G0 F' + this.rapidRate,
             'G1 F' + this.feedRate,
             ''
         )

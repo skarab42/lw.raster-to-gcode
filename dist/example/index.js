@@ -8,8 +8,9 @@ var settings = {
     ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
     toolDiameter: 0.1,      // Tool diameter in millimeters
-    feedRate    : 1500,     // Feed rate in mm/min (F value)
-    feedUnit    : 'mm/min', // Feed rate unit [mm/min, mm/sec]
+    rapidRate   : 1500,     // Feed rate in mm/min (G0 F value)
+    feedRate    : 500,      // Feed rate in mm/min (G1 F value)
+    rateUnit    : 'mm/min', // Feed rate unit [mm/min, mm/sec]
 
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
     beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
@@ -281,7 +282,7 @@ $(document).ready(function() {
         if (this.type === 'checkbox') {
             value = this.checked;
         }
-        else if (mainKey !== 'feedUnit') {
+        else if (mainKey !== 'rateUnit') {
             value = parseFloat(value);
         }
 
