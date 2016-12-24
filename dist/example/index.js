@@ -49,7 +49,8 @@ var settings = {
     doneContext: null  // On done callback context
 };
 
-var settingsVersion = '0.1.0';
+var settingsVersion = '0.1.1';
+settings.___toggles = {};
 
 function loadSettings() {
     var store = JSON.parse(localStorage.getItem('lw.raster-to-gcode'));
@@ -96,6 +97,16 @@ function loadSettings() {
             $(this).val(value);
         }
     });
+
+    for (var section in settings.___toggles) {
+        var $section = $(section);
+        var $toggle  = $section.find('h3 i.toggle');
+        var $items   = $section.children('label, hr');
+        var visible  = settings.___toggles[section];
+
+        $toggle.toggleClass('fa-caret-up', visible).toggleClass('fa-caret-down', !visible);
+        $items.toggle(visible);
+    }
 }
 
 function saveSettings() {
@@ -327,8 +338,19 @@ $(document).ready(function() {
     });
 
     $toggles.on('click', function() {
-        $(this).toggleClass('fa-caret-up')
-               .toggleClass('fa-caret-down')
-               .parent().parent().children('label, hr').toggle();
+        var $toggle  = $(this);
+        var $section = $toggle.parent().parent();
+        var $items   = $section.children('label, hr');
+
+        $toggle.toggleClass('fa-caret-up').toggleClass('fa-caret-down');
+        $items.toggle();
+
+        var classNames = $section.attr('class');
+        var selector   = $.trim(classNames).replace(/\s+/gi, '.');
+        var visible    = $toggle.hasClass('fa-caret-up');
+
+        settings.___toggles['.' + selector] = visible;
+
+        saveSettings();
     })
 });
