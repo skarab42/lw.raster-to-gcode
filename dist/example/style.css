@@ -85,6 +85,11 @@ input {
     margin-bottom: 15px;
 }
 
+#explorer h3 i.toggle {
+    font-size: 14px;
+    font-weight: normal;
+}
+
 #explorer hr {
     border: 0;
     margin: 5px 0;

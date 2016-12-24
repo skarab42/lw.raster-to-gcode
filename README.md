@@ -30,11 +30,17 @@ Or download the last build from https://raw.githubusercontent.com/lautr3k/lw.ras
 let settings = {
     ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
-    beamSize : 0.1,                  // Beam size in millimeters
+    toolDiameter: 0.1,      // Tool diameter in millimeters
+    feedRate    : 1500,     // Feed rate in mm/min (F value)
+    feedUnit    : 'mm/min', // Feed rate unit [mm/min, mm/sec]
+
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
     beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
-    feedRate : 1500,                 // Feed rate in mm/min (F value)
-    feedUnit : 'mm/min',             // Feed rate unit [mm/min, mm/sec]
+
+    milling : false, // EXPERIMENTAL
+    zSafe   : 5,     // Safe Z for fast move
+    zSurface: 0,     // Usinable surface
+    zDepth  : -10,   // Z depth (min:white, max:black)
 
     offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
     trimLine : true,           // Trim trailing white pixels

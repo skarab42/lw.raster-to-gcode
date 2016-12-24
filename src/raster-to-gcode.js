@@ -8,11 +8,17 @@ class RasterToGcode extends CanvasGrid {
         settings = Object.assign({
             ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
-            beamSize : 0.1,                  // Beam size in millimeters
+            toolDiameter: 0.1,      // Tool diameter in millimeters
+            feedRate    : 1500,     // Feed rate in mm/min (F value)
+            feedUnit    : 'mm/min', // Feed rate unit [mm/min, mm/sec]
+
             beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
             beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
-            feedRate : 1500,                 // Feed rate in mm/min (F value)
-            feedUnit : 'mm/min',             // Feed rate unit [mm/min, mm/sec]
+
+            milling : false, // EXPERIMENTAL
+            zSafe   : 5,     // Safe Z for fast move
+            zSurface: 0,     // Usinable surface
+            zDepth  : -10,   // Z depth (min:white, max:black)
 
             offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
             trimLine : true,           // Trim trailing white pixels
@@ -46,6 +52,18 @@ class RasterToGcode extends CanvasGrid {
         // Init properties
         super(settings)
 
+        // Milling settings
+        if (this.milling) {
+            if (this.zSafe < this.zSurface) {
+                throw new Error('"zSafe" must be greater to "zSurface"')
+            }
+        }
+
+        // Negative beam size ?
+        if (this.toolDiameter <= 0) {
+            throw new Error('"toolDiameter" must be positive')
+        }
+
         // Uniforme ppi
         if (! this.ppi.x) {
             this.ppi = { x: this.ppi, y: this.ppi }
@@ -61,8 +79,8 @@ class RasterToGcode extends CanvasGrid {
 
         // Calculate scale ratio
         this.scaleRatio = {
-            x: this.ppm.x / this.beamSize,
-            y: this.ppm.y / this.beamSize
+            x: this.ppm.x / this.toolDiameter,
+            y: this.ppm.y / this.toolDiameter
         }
 
         // State...
@@ -78,7 +96,7 @@ class RasterToGcode extends CanvasGrid {
         this.G0 = ['G', this.burnWhite ? 1 : 0]
 
         // Calculate beam offset
-        this.beamOffset = this.beamSize * 1000 / 2000
+        this.beamOffset = this.toolDiameter * 1000 / 2000
 
         // Calculate real beam range
         this.realBeamRange = {
@@ -103,8 +121,8 @@ class RasterToGcode extends CanvasGrid {
 
         // Calculate output size
         this.outputSize = {
-            width : this.size.width  * (this.beamSize * 1000) / 1000,
-            height: this.size.height * (this.beamSize * 1000) / 1000
+            width : this.size.width  * (this.toolDiameter * 1000) / 1000,
+            height: this.size.height * (this.toolDiameter * 1000) / 1000
         }
     }
 
@@ -151,7 +169,7 @@ class RasterToGcode extends CanvasGrid {
             '; Size       : ' + this.outputSize.width + ' x ' + this.outputSize.height + ' mm',
             '; PPI        : x: ' + this.ppi.x + ' - y: ' + this.ppi.y,
             '; PPM        : x: ' + this.ppm.x + ' - y: ' + this.ppm.y,
-            '; Beam size  : ' + this.beamSize + ' mm',
+            '; Tool diam. : ' + this.toolDiameter + ' mm',
             '; Beam range : ' + this.beamRange.min + ' to ' + this.beamRange.max,
             '; Beam power : ' + this.beamPower.min + ' to ' + this.beamPower.max + ' %',
             '; Feed rate  : ' + this.feedRate + ' mm/min'
@@ -181,8 +199,8 @@ class RasterToGcode extends CanvasGrid {
 
     // Map S value to pixel power
     _mapPixelPower(value) {
-        return value * (this.realBeamRange.max - this.realBeamRange.min)
-                     / 255 + this.realBeamRange.min
+        let range = this.milling ? { min: 0, max: this.zDepth } : this.realBeamRange
+        return value * (range.max - range.min) / 255 + range.min
     }
 
     // Compute and return a command, return null if not changed
@@ -248,14 +266,14 @@ class RasterToGcode extends CanvasGrid {
 
         // Commands
         point.G = point.s ? ['G', 1] : this.G0
-        point.X = (point.x * this.beamSize) + this.offsets.X
-        point.Y = (point.y * this.beamSize) + this.offsets.Y
+        point.X = (point.x * this.toolDiameter) + this.offsets.X
+        point.Y = (point.y * this.toolDiameter) + this.offsets.Y
         point.S = this._mapPixelPower(point.s)
 
         // Offsets
         if (this.diagonal) {
             // Vertical offset
-            point.Y += this.beamSize
+            point.Y += this.toolDiameter
 
             // Horizontal offset
             if (point.first || point.lastWhite) {
@@ -370,7 +388,7 @@ class RasterToGcode extends CanvasGrid {
     // Process current line and return an array of GCode text lines
     _processCurrentLine(reversed) {
         // Trim trailing white spaces ?
-        if (this.trimLine && ! this._trimCurrentLine()) {
+        if ((this.milling || this.trimLine) && ! this._trimCurrentLine()) {
             // Skip empty line
             return null
         }
@@ -400,21 +418,70 @@ class RasterToGcode extends CanvasGrid {
         // Init loop vars...
         let command, gcode = []
 
+        let addCommand = (...args) => {
+            command = this._command(...args)
+            command && gcode.push(command)
+        }
+
         // Get first point
         point = this._getPoint(index)
 
-        // Move to start of the line
-        command = this._command(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0])
-        command && gcode.push(command)
+        // Action
+        if (this.milling) {
+            let plung     = false
+            let lastPoint = null
 
-        // For each point on the line
-        while (point) {
-            // Burn to next point
-            command = this._command(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S])
-            command && gcode.push(command)
+            // Move to start of the line
+            addCommand(['G', 0], ['Z', this.zSafe])
+            addCommand(['G', 0], ['X', point.X], ['Y', point.Y])
+            addCommand(['G', 0], ['Z', this.zSurface])
 
-            // Get next point
-            point = this._getPoint(++index)
+            // For each point on the line
+            while (point) {
+                if (point.S) {
+                    if (plung) {
+                        addCommand(['G', 0], ['Z', this.zSurface])
+                        plung = false
+                    }
+
+                    addCommand(['G', 1], ['Z', this.zSurface + point.S])
+                    addCommand(['G', 1], ['X', point.X], ['Y', point.Y])
+                }
+                else {
+                    if (plung) {
+                        addCommand(['G', 1], ['Z', this.zSurface])
+                        plung = false
+                    }
+
+                    addCommand(['G', 0], ['Z', this.zSafe])
+                    addCommand(['G', 0], ['X', point.X], ['Y', point.Y])
+                }
+
+                if (point.lastWhite || point.lastColored) {
+                    plung = true
+                }
+
+                // Get next point
+                lastPoint = point
+                point     = this._getPoint(++index)
+            }
+
+            // Move to Z safe
+            addCommand(['G', 1], ['Z', this.zSurface])
+            addCommand(['G', 0], ['Z', this.zSafe])
+        }
+        else {
+            // Move to start of the line
+            addCommand(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0])
+
+            // For each point on the line
+            while (point) {
+                // Burn to next point
+                addCommand(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S])
+
+                // Get next point
+                point = this._getPoint(++index)
+            }
         }
 
         // Return gcode commands array
