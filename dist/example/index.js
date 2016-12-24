@@ -49,10 +49,20 @@ var settings = {
     doneContext: null  // On done callback context
 };
 
+var settingsVersion = '0.1.0';
+
 function loadSettings() {
     var store = JSON.parse(localStorage.getItem('lw.raster-to-gcode'));
 
-    if (store) { settings = store; }
+    if (store) {
+        if (! store.settingsVersion || store.settingsVersion !== settingsVersion) {
+            settings.settingsVersion = settingsVersion;
+            saveSettings();
+        }
+        else {
+            settings = store;
+        }
+    }
 
     $settings.find('select, input').each(function() {
         var keys    = this.id.split('-');
