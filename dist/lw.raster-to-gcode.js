@@ -110,6 +110,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            zSafe: 5, // Safe Z for fast move
 	            zSurface: 0, // Usinable surface
 	            zDepth: -10, // Z depth (min:white, max:black)
+	            passDepth: 1, // Pass depth in millimeters
 	
 	            offsets: { X: 0, Y: 0 }, // Global coordinates offsets
 	            trimLine: true, // Trim trailing white pixels
@@ -149,6 +150,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	            if (_this.zSafe < _this.zSurface) {
 	                throw new Error('"zSafe" must be greater to "zSurface"');
 	            }
+	
+	            _this.passes = Math.abs(Math.floor(_this.zDepth / _this.passDepth));
 	        }
 	
 	        // Negative beam size ?
@@ -177,6 +180,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	        // State...
 	        _this.gcode = null;
+	        _this.gcodes = null;
 	        _this.currentLine = null;
 	        _this.lastCommands = null;
 	
@@ -231,6 +235,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        value: function run(settings) {
 	            // Reset state
 	            this.gcode = [];
+	            this.gcodes = [];
 	            this.lastCommands = {};
 	            this.currentLine = null;
 	
@@ -501,10 +506,139 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: '_processCurrentLine',
 	        value: function _processCurrentLine(reversed) {
+	            if (this.milling) {
+	                return this._processMillingLine(reversed);
+	            }
+	
+	            return this._processLaserLine(reversed);
+	        }
+	
+	        // Process current line and return an array of GCode text lines
+	
+	    }, {
+	        key: '_processMillingLine',
+	        value: function _processMillingLine(reversed) {
 	            var _this2 = this;
 	
+	            // Skip empty line
+	            if (!this._trimCurrentLine()) {
+	                return null;
+	            }
+	
+	            // Join pixel with same power
+	            if (this.joinPixel) {
+	                this._reduceCurrentLine();
+	            }
+	
+	            // Mark first and last point on the current line
+	            this.currentLine[0].first = true;
+	            this.currentLine[this.currentLine.length - 1].last = true;
+	
+	            // Reversed line ?
+	            if (reversed) {
+	                this.currentLine = this.currentLine.reverse();
+	            }
+	
+	            // Point index
+	            var point = void 0,
+	                index = 0;
+	
+	            // Init loop vars...
+	            var command = void 0,
+	                gcode = [];
+	
+	            var addCommand = function addCommand() {
+	                command = _this2._command.apply(_this2, arguments);
+	                command && gcode.push(command);
+	            };
+	
+	            // Get first point
+	            point = this._getPoint(index);
+	
+	            var plung = false;
+	            var Z = void 0,
+	                zMax = void 0;
+	
+	            var pass = function pass(passNum) {
+	                // Move to start of the line
+	                addCommand(['G', 0], ['Z', _this2.zSafe]);
+	                addCommand(['G', 0], ['X', point.X], ['Y', point.Y]);
+	                addCommand(['G', 0], ['Z', _this2.zSurface]);
+	
+	                // For each point on the line
+	                while (point) {
+	                    if (point.S) {
+	                        if (plung) {
+	                            addCommand(['G', 0], ['Z', _this2.zSurface]);
+	                            plung = false;
+	                        }
+	
+	                        Z = point.S;
+	                        zMax = _this2.passDepth * passNum;
+	
+	                        // Last pass
+	                        if (passNum < _this2.passes) {
+	                            Z = Math.max(Z, -zMax);
+	                        }
+	
+	                        addCommand(['G', 1], ['Z', _this2.zSurface + Z]);
+	                        addCommand(['G', 1], ['X', point.X], ['Y', point.Y]);
+	                    } else {
+	                        if (plung) {
+	                            addCommand(['G', 1], ['Z', _this2.zSurface]);
+	                            plung = false;
+	                        }
+	
+	                        addCommand(['G', 0], ['Z', _this2.zSafe]);
+	                        addCommand(['G', 0], ['X', point.X], ['Y', point.Y]);
+	                    }
+	
+	                    if (point.lastWhite || point.lastColored) {
+	                        plung = true;
+	                    }
+	
+	                    // Get next point
+	                    point = _this2._getPoint(++index);
+	                }
+	
+	                // Move to Z safe
+	                addCommand(['G', 1], ['Z', _this2.zSurface]);
+	                addCommand(['G', 0], ['Z', _this2.zSafe]);
+	            };
+	
+	            for (var i = 1; i <= this.passes; i++) {
+	                pass(i);
+	
+	                if (!gcode.length) {
+	                    break;
+	                }
+	
+	                if (this.gcodes.length < i) {
+	                    this.gcodes.push([]);
+	                } else {
+	                    this.gcodes[i - 1].push.apply(this.gcodes[i - 1], gcode);
+	                }
+	
+	                index = 0;
+	                gcode = [];
+	                point = this._getPoint(index);
+	
+	                this.lastCommands = {};
+	            }
+	
+	            // Not sure what to return...
+	            return null;
+	        }
+	
+	        // Process current line and return an array of GCode text lines
+	
+	    }, {
+	        key: '_processLaserLine',
+	        value: function _processLaserLine(reversed) {
+	            var _this3 = this;
+	
 	            // Trim trailing white spaces ?
-	            if ((this.milling || this.trimLine) && !this._trimCurrentLine()) {
+	            if (this.trimLine && !this._trimCurrentLine()) {
 	                // Skip empty line
 	                return null;
 	            }
@@ -537,67 +671,23 @@ return /******/ (function(modules) { // webpackBootstrap
 	                gcode = [];
 	
 	            var addCommand = function addCommand() {
-	                command = _this2._command.apply(_this2, arguments);
+	                command = _this3._command.apply(_this3, arguments);
 	                command && gcode.push(command);
 	            };
 	
 	            // Get first point
 	            point = this._getPoint(index);
 	
-	            // Action
-	            if (this.milling) {
-	                var plung = false;
-	                var lastPoint = null;
+	            // Move to start of the line
+	            addCommand(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0]);
 	
-	                // Move to start of the line
-	                addCommand(['G', 0], ['Z', this.zSafe]);
-	                addCommand(['G', 0], ['X', point.X], ['Y', point.Y]);
-	                addCommand(['G', 0], ['Z', this.zSurface]);
+	            // For each point on the line
+	            while (point) {
+	                // Burn to next point
+	                addCommand(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S]);
 	
-	                // For each point on the line
-	                while (point) {
-	                    if (point.S) {
-	                        if (plung) {
-	                            addCommand(['G', 0], ['Z', this.zSurface]);
-	                            plung = false;
-	                        }
-	
-	                        addCommand(['G', 1], ['Z', this.zSurface + point.S]);
-	                        addCommand(['G', 1], ['X', point.X], ['Y', point.Y]);
-	                    } else {
-	                        if (plung) {
-	                            addCommand(['G', 1], ['Z', this.zSurface]);
-	                            plung = false;
-	                        }
-	
-	                        addCommand(['G', 0], ['Z', this.zSafe]);
-	                        addCommand(['G', 0], ['X', point.X], ['Y', point.Y]);
-	                    }
-	
-	                    if (point.lastWhite || point.lastColored) {
-	                        plung = true;
-	                    }
-	
-	                    // Get next point
-	                    lastPoint = point;
-	                    point = this._getPoint(++index);
-	                }
-	
-	                // Move to Z safe
-	                addCommand(['G', 1], ['Z', this.zSurface]);
-	                addCommand(['G', 0], ['Z', this.zSafe]);
-	            } else {
-	                // Move to start of the line
-	                addCommand(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0]);
-	
-	                // For each point on the line
-	                while (point) {
-	                    // Burn to next point
-	                    addCommand(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S]);
-	
-	                    // Get next point
-	                    point = this._getPoint(++index);
-	                }
+	                // Get next point
+	                point = this._getPoint(++index);
 	            }
 	
 	            // Return gcode commands array
@@ -614,7 +704,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: '_scanHorizontally',
 	        value: function _scanHorizontally(nonBlocking) {
-	            var _this3 = this;
+	            var _this4 = this;
 	
 	            // Init loop vars
 	            var x = 0,
@@ -632,132 +722,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	            var computeCurrentLine = function computeCurrentLine() {
 	                // Reset current line
-	                _this3.currentLine = [];
+	                _this4.currentLine = [];
 	
 	                // Reset point object
 	                point = null;
 	
 	                // For each pixel on the line
 	                for (x = 0; x <= w; x++) {
-	                    // Get pixel power
-	                    s = p = _this3._getPixelPower(x, y, p);
-	
-	                    // Is last white/colored pixel
-	                    lastWhite = point && !point.p && p;
-	                    lastColored = point && point.p && !p;
-	
-	                    // Pixel color from last one on normal line
-	                    if (!reversed && point) {
-	                        s = point.p;
-	                    }
-	
-	                    // Create point object
-	                    point = { x: x, y: y, s: s, p: p };
-	
-	                    // Set last white/colored pixel
-	                    lastWhite && (point.lastWhite = true);
-	                    lastColored && (point.lastColored = true);
-	
-	                    // Add point to current line
-	                    _this3.currentLine.push(point);
-	                }
-	            };
-	
-	            var percent = 0;
-	            var lastPercent = 0;
-	
-	            var processCurrentLine = function processCurrentLine() {
-	                // Process pixels line
-	                gcode = _this3._processCurrentLine(reversed);
-	
-	                // Call progress callback
-	                percent = Math.round(y / h * 100);
-	                if (percent > lastPercent) {
-	                    _this3._onProgress({ gcode: gcode, percent: percent });
-	                }
-	                lastPercent = percent;
-	
-	                // Skip empty gcode line
-	                if (!gcode) {
-	                    return;
-	                }
-	
-	                // Toggle line state
-	                reversed = !reversed;
-	
-	                // Concat line
-	                _this3.gcode.push.apply(_this3.gcode, gcode);
-	            };
-	
-	            var processNextLine = function processNextLine() {
-	                computeCurrentLine();
-	                processCurrentLine();
-	
-	                y++;
-	
-	                if (y < h) {
-	                    if (nonBlocking) {
-	                        setTimeout(processNextLine, 0);
-	                    } else {
-	                        processNextLine();
-	                    }
-	                } else {
-	                    _this3._onDone({ gcode: _this3.gcode });
-	                }
-	            };
-	
-	            processNextLine();
-	
-	            // // For each image line
-	            // for (y = 0; y < h; y++) {
-	            //     processNextLine()
-	            // }
-	        }
-	
-	        // Parse diagonally
-	
-	    }, {
-	        key: '_scanDiagonally',
-	        value: function _scanDiagonally(nonBlocking) {
-	            var _this4 = this;
-	
-	            // Init loop vars
-	            var x = 0,
-	                y = 0;
-	            var s = void 0,
-	                p = void 0,
-	                point = void 0,
-	                gcode = void 0;
-	            var w = this.size.width;
-	            var h = this.size.height;
-	
-	            var totalLines = w + h - 1;
-	            var lineNum = 0;
-	            var reversed = false;
-	            var lastWhite = false;
-	            var lastColored = false;
-	
-	            var computeCurrentLine = function computeCurrentLine(x, y) {
-	                // Reset current line
-	                _this4.currentLine = [];
-	
-	                // Reset point object
-	                point = null;
-	
-	                // Increment line num
-	                lineNum++;
-	
-	                while (true) {
-	                    // Y limit reached !
-	                    if (y < -1 || y == h) {
-	                        break;
-	                    }
-	
-	                    // X limit reached !
-	                    if (x < 0 || x > w) {
-	                        break;
-	                    }
-	
 	                    // Get pixel power
 	                    s = p = _this4._getPixelPower(x, y, p);
 	
@@ -777,12 +748,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    lastWhite && (point.lastWhite = true);
 	                    lastColored && (point.lastColored = true);
 	
-	                    // Add the new point
+	                    // Add point to current line
 	                    _this4.currentLine.push(point);
-	
-	                    // Next coords
-	                    x++;
-	                    y--;
 	                }
 	            };
 	
@@ -794,7 +761,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                gcode = _this4._processCurrentLine(reversed);
 	
 	                // Call progress callback
-	                percent = Math.round(lineNum / totalLines * 100);
+	                percent = Math.round(y / h * 100);
 	                if (percent > lastPercent) {
 	                    _this4._onProgress({ gcode: gcode, percent: percent });
 	                }
@@ -810,6 +777,135 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	                // Concat line
 	                _this4.gcode.push.apply(_this4.gcode, gcode);
+	            };
+	
+	            var processNextLine = function processNextLine() {
+	                computeCurrentLine();
+	                processCurrentLine();
+	
+	                y++;
+	
+	                if (y < h) {
+	                    if (nonBlocking) {
+	                        setTimeout(processNextLine, 0);
+	                    } else {
+	                        processNextLine();
+	                    }
+	                } else {
+	                    if (_this4.milling) {
+	                        _this4.gcodes.forEach(function (gcode) {
+	                            _this4.gcode.push.apply(_this4.gcode, gcode);
+	                        });
+	                    }
+	
+	                    _this4._onDone({ gcode: _this4.gcode });
+	                }
+	            };
+	
+	            processNextLine();
+	
+	            // // For each image line
+	            // for (y = 0; y < h; y++) {
+	            //     processNextLine()
+	            // }
+	        }
+	
+	        // Parse diagonally
+	
+	    }, {
+	        key: '_scanDiagonally',
+	        value: function _scanDiagonally(nonBlocking) {
+	            var _this5 = this;
+	
+	            // Init loop vars
+	            var x = 0,
+	                y = 0;
+	            var s = void 0,
+	                p = void 0,
+	                point = void 0,
+	                gcode = void 0;
+	            var w = this.size.width;
+	            var h = this.size.height;
+	
+	            var totalLines = w + h - 1;
+	            var lineNum = 0;
+	            var reversed = false;
+	            var lastWhite = false;
+	            var lastColored = false;
+	
+	            var computeCurrentLine = function computeCurrentLine(x, y) {
+	                // Reset current line
+	                _this5.currentLine = [];
+	
+	                // Reset point object
+	                point = null;
+	
+	                // Increment line num
+	                lineNum++;
+	
+	                while (true) {
+	                    // Y limit reached !
+	                    if (y < -1 || y == h) {
+	                        break;
+	                    }
+	
+	                    // X limit reached !
+	                    if (x < 0 || x > w) {
+	                        break;
+	                    }
+	
+	                    // Get pixel power
+	                    s = p = _this5._getPixelPower(x, y, p);
+	
+	                    // Is last white/colored pixel
+	                    lastWhite = point && !point.p && p;
+	                    lastColored = point && point.p && !p;
+	
+	                    // Pixel color from last one on normal line
+	                    if (!reversed && point) {
+	                        s = point.p;
+	                    }
+	
+	                    // Create point object
+	                    point = { x: x, y: y, s: s, p: p };
+	
+	                    // Set last white/colored pixel
+	                    lastWhite && (point.lastWhite = true);
+	                    lastColored && (point.lastColored = true);
+	
+	                    // Add the new point
+	                    _this5.currentLine.push(point);
+	
+	                    // Next coords
+	                    x++;
+	                    y--;
+	                }
+	            };
+	
+	            var percent = 0;
+	            var lastPercent = 0;
+	
+	            var processCurrentLine = function processCurrentLine() {
+	                // Process pixels line
+	                gcode = _this5._processCurrentLine(reversed);
+	
+	                // Call progress callback
+	                percent = Math.round(lineNum / totalLines * 100);
+	                if (percent > lastPercent) {
+	                    _this5._onProgress({ gcode: gcode, percent: percent });
+	                }
+	                lastPercent = percent;
+	
+	                // Skip empty gcode line
+	                if (!gcode) {
+	                    return;
+	                }
+	
+	                // Toggle line state
+	                reversed = !reversed;
+	
+	                // Concat line
+	                _this5.gcode.push.apply(_this5.gcode, gcode);
 	            };
 	
 	            var processNextLine = function processNextLine() {
@@ -830,7 +926,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                        processNextLine();
 	                    }
 	                } else {
-	                    _this4._onDone({ gcode: _this4.gcode });
+	                    _this5._onDone({ gcode: _this5.gcode });
 	                }
 	            };
 	
@@ -859,7 +955,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: 'on',
 	        value: function on(event, callback, context) {
-	            var _this5 = this;
+	            var _this6 = this;
 	
 	            var method = '_on' + event[0].toUpperCase() + event.slice(1);
 	
@@ -868,7 +964,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            }
 	
 	            this[method] = function (event) {
-	                return callback.call(context || _this5, event);
+	                return callback.call(context || _this6, event);
 	            };
 	
 	            return this;
@@ -879,7 +975,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: 'getHeightMap',
 	        value: function getHeightMap(settings) {
-	            var _this6 = this;
+	            var _this7 = this;
 	
 	            // Init loop vars{
 	            var heightMap = [];
@@ -911,14 +1007,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	                // For each pixel on the line
 	                for (x = 0; x < w; x++) {
-	                    pixels.push(_this6._mapPixelPower(_this6._getPixelPower(x, y)));
+	                    pixels.push(_this7._mapPixelPower(_this7._getPixelPower(x, y)));
 	                }
 	
 	                // Call progress callback
 	                percent = Math.round(y / h * 100);
 	
 	                if (percent > lastPercent) {
-	                    onProgress.call(settings.progressContext || _this6, { pixels: pixels, percent: percent });
+	                    onProgress.call(settings.progressContext || _this7, { pixels: pixels, percent: percent });
 	                }
 	
 	                lastPercent = percent;
@@ -939,7 +1035,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                        processNextLine();
 	                    }
 	                } else {
-	                    onDone.call(settings.doneContext || _this6, { heightMap: heightMap });
+	                    onDone.call(settings.doneContext || _this7, { heightMap: heightMap });
 	                }
 	            };
 	
