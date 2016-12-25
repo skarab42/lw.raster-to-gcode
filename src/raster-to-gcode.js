@@ -16,10 +16,11 @@ class RasterToGcode extends CanvasGrid {
             beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
             beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
 
-            milling : false, // EXPERIMENTAL
-            zSafe   : 5,     // Safe Z for fast move
-            zSurface: 0,     // Usinable surface
-            zDepth  : -10,   // Z depth (min:white, max:black)
+            milling  : false, // EXPERIMENTAL
+            zSafe    : 5,     // Safe Z for fast move
+            zSurface : 0,     // Usinable surface
+            zDepth   : -10,   // Z depth (min:white, max:black)
+            passDepth: 1,     // Pass depth in millimeters
 
             offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
             trimLine : true,           // Trim trailing white pixels
@@ -58,6 +59,8 @@ class RasterToGcode extends CanvasGrid {
             if (this.zSafe < this.zSurface) {
                 throw new Error('"zSafe" must be greater to "zSurface"')
             }
+
+            this.passes = Math.abs(Math.floor(this.zDepth / this.passDepth))
         }
 
         // Negative beam size ?
@@ -86,6 +89,7 @@ class RasterToGcode extends CanvasGrid {
 
         // State...
         this.gcode        = null
+        this.gcodes       = null
         this.currentLine  = null
         this.lastCommands = null
 
@@ -132,6 +136,7 @@ class RasterToGcode extends CanvasGrid {
     run(settings) {
         // Reset state
         this.gcode        = []
+        this.gcodes       = []
         this.lastCommands = {}
         this.currentLine  = null
 
@@ -402,8 +407,128 @@ class RasterToGcode extends CanvasGrid {
 
     // Process current line and return an array of GCode text lines
     _processCurrentLine(reversed) {
+        if (this.milling) {
+            return this._processMillingLine(reversed)
+        }
+
+        return this._processLaserLine(reversed)
+    }
+
+    // Process current line and return an array of GCode text lines
+    _processMillingLine(reversed) {
+        // Skip empty line
+        if (! this._trimCurrentLine()) {
+            return null
+        }
+
+        // Join pixel with same power
+        if (this.joinPixel) {
+            this._reduceCurrentLine()
+        }
+
+        // Mark first and last point on the current line
+        this.currentLine[0].first = true
+        this.currentLine[this.currentLine.length - 1].last = true
+
+        // Reversed line ?
+        if (reversed) {
+            this.currentLine = this.currentLine.reverse()
+        }
+
+        // Point index
+        let point, index = 0
+
+        // Init loop vars...
+        let command, gcode = []
+
+        let addCommand = (...args) => {
+            command = this._command(...args)
+            command && gcode.push(command)
+        }
+
+        // Get first point
+        point = this._getPoint(index)
+
+        let plung = false
+        let Z, zMax
+
+        let pass = (passNum) => {
+            // Move to start of the line
+            addCommand(['G', 0], ['Z', this.zSafe])
+            addCommand(['G', 0], ['X', point.X], ['Y', point.Y])
+            addCommand(['G', 0], ['Z', this.zSurface])
+
+            // For each point on the line
+            while (point) {
+                if (point.S) {
+                    if (plung) {
+                        addCommand(['G', 0], ['Z', this.zSurface])
+                        plung = false
+                    }
+
+                    Z    = point.S
+                    zMax = this.passDepth * passNum
+
+                    // Last pass
+                    if (passNum < this.passes) {
+                        Z = Math.max(Z, -zMax)
+                    }
+
+                    addCommand(['G', 1], ['Z', this.zSurface + Z])
+                    addCommand(['G', 1], ['X', point.X], ['Y', point.Y])
+                }
+                else {
+                    if (plung) {
+                        addCommand(['G', 1], ['Z', this.zSurface])
+                        plung = false
+                    }
+
+                    addCommand(['G', 0], ['Z', this.zSafe])
+                    addCommand(['G', 0], ['X', point.X], ['Y', point.Y])
+                }
+
+                if (point.lastWhite || point.lastColored) {
+                    plung = true
+                }
+
+                // Get next point
+                point = this._getPoint(++index)
+            }
+
+            // Move to Z safe
+            addCommand(['G', 1], ['Z', this.zSurface])
+            addCommand(['G', 0], ['Z', this.zSafe])
+        }
+
+        for (var i = 1; i <= this.passes; i++) {
+            pass(i)
+
+            if (! gcode.length) {
+                break
+            }
+
+            if (this.gcodes.length < i) {
+                this.gcodes.push([])
+            }
+            else {
+                this.gcodes[i - 1].push.apply(this.gcodes[i - 1], gcode)
+            }
+
+            index = 0
+            gcode = []
+            point = this._getPoint(index)
+            
+            this.lastCommands = {}
+        }
+
+        // Not sure what to return...
+        return null
+    }
+
+    // Process current line and return an array of GCode text lines
+    _processLaserLine(reversed) {
         // Trim trailing white spaces ?
-        if ((this.milling || this.trimLine) && ! this._trimCurrentLine()) {
+        if (this.trimLine && ! this._trimCurrentLine()) {
             // Skip empty line
             return null
         }
@@ -441,62 +566,16 @@ class RasterToGcode extends CanvasGrid {
         // Get first point
         point = this._getPoint(index)
 
-        // Action
-        if (this.milling) {
-            let plung     = false
-            let lastPoint = null
+        // Move to start of the line
+        addCommand(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0])
 
-            // Move to start of the line
-            addCommand(['G', 0], ['Z', this.zSafe])
-            addCommand(['G', 0], ['X', point.X], ['Y', point.Y])
-            addCommand(['G', 0], ['Z', this.zSurface])
+        // For each point on the line
+        while (point) {
+            // Burn to next point
+            addCommand(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S])
 
-            // For each point on the line
-            while (point) {
-                if (point.S) {
-                    if (plung) {
-                        addCommand(['G', 0], ['Z', this.zSurface])
-                        plung = false
-                    }
-
-                    addCommand(['G', 1], ['Z', this.zSurface + point.S])
-                    addCommand(['G', 1], ['X', point.X], ['Y', point.Y])
-                }
-                else {
-                    if (plung) {
-                        addCommand(['G', 1], ['Z', this.zSurface])
-                        plung = false
-                    }
-
-                    addCommand(['G', 0], ['Z', this.zSafe])
-                    addCommand(['G', 0], ['X', point.X], ['Y', point.Y])
-                }
-
-                if (point.lastWhite || point.lastColored) {
-                    plung = true
-                }
-
-                // Get next point
-                lastPoint = point
-                point     = this._getPoint(++index)
-            }
-
-            // Move to Z safe
-            addCommand(['G', 1], ['Z', this.zSurface])
-            addCommand(['G', 0], ['Z', this.zSafe])
-        }
-        else {
-            // Move to start of the line
-            addCommand(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0])
-
-            // For each point on the line
-            while (point) {
-                // Burn to next point
-                addCommand(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S])
-
-                // Get next point
-                point = this._getPoint(++index)
-            }
+            // Get next point
+            point = this._getPoint(++index)
         }
 
         // Return gcode commands array
@@ -594,6 +673,12 @@ class RasterToGcode extends CanvasGrid {
                 }
             }
             else {
+                if (this.milling) {
+                    this.gcodes.forEach(gcode => {
+                        this.gcode.push.apply(this.gcode, gcode)
+                    })
+                }
+
                 this._onDone({ gcode: this.gcode })
             }
         }

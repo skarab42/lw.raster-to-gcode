@@ -15,10 +15,11 @@ var settings = {
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
     beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
 
-    milling : false, // EXPERIMENTAL
-    zSafe   : 5,     // Safe Z for fast move
-    zSurface: 0,     // Usinable surface
-    zDepth  : -10,   // Z depth (min:white, max:black)
+    milling  : false, // EXPERIMENTAL
+    zSafe    : 5,     // Safe Z for fast move
+    zSurface : 0,     // Usinable surface
+    zDepth   : -10,   // Z depth (min:white, max:black)
+    passDepth: 1,     // Pass depth in millimeters
 
     offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
     trimLine : true,           // Trim trailing white pixels
@@ -49,7 +50,7 @@ var settings = {
     doneContext: null  // On done callback context
 };
 
-var settingsVersion = '0.1.1';
+var settingsVersion = '0.1.2';
 settings.___toggles = {};
 
 function loadSettings() {
