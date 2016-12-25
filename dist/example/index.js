@@ -8,17 +8,17 @@ var settings = {
     ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
     toolDiameter: 0.1,      // Tool diameter in millimeters
-    rapidRate   : 1500,     // Feed rate in mm/min (G0 F value)
+    rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value)
     feedRate    : 500,      // Feed rate in mm/min (G1 F value)
-    rateUnit    : 'mm/min', // Feed rate unit [mm/min, mm/sec]
+    rateUnit    : 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
 
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
     beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
 
     milling  : false, // EXPERIMENTAL
     zSafe    : 5,     // Safe Z for fast move
-    zSurface : 0,     // Usinable surface
-    zDepth   : -10,   // Z depth (min:white, max:black)
+    zSurface : 0,     // Usinable surface (white pixels)
+    zDepth   : -10,   // Z depth (black pixels)
     passDepth: 1,     // Pass depth in millimeters
 
     offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
