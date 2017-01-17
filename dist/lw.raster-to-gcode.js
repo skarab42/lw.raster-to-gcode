@@ -98,11 +98,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	        settings = Object.assign({
 	            ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 	
-	            beamSize: 0.1, // Beam size in millimeters
+	            toolDiameter: 0.1, // Tool diameter in millimeters
+	            rapidRate: 1500, // Feed rate in mm/min (G0 F value)
+	            feedRate: 500, // Feed rate in mm/min (G1 F value)
+	            rateUnit: 'mm/min', // Feed rate unit [mm/min, mm/sec]
+	
 	            beamRange: { min: 0, max: 1 }, // Beam power range (Firmware value)
 	            beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
-	            feedRate: 1500, // Feed rate in mm/min (F value)
-	            feedUnit: 'mm/min', // Feed rate unit [mm/min, mm/sec]
+	
+	            milling: false, // EXPERIMENTAL
+	            zSafe: 5, // Safe Z for fast move
+	            zSurface: 0, // Usinable surface
+	            zDepth: -10, // Z depth (min:white, max:black)
+	            passDepth: 1, // Pass depth in millimeters
 	
 	            offsets: { X: 0, Y: 0 }, // Global coordinates offsets
 	            trimLine: true, // Trim trailing white pixels
@@ -110,6 +118,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            burnWhite: true, // [true = G1 S0 | false = G0] on inner white pixels
 	            verboseG: false, // Output verbose GCode (print each commands)
 	            diagonal: false, // Go diagonally (increase the distance between points)
+	            overscan: 0, // Add some extra white space (in millimeters) before and after each line
 	
 	            precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
 	
@@ -121,7 +130,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	                contrast: 0, // Image contrast [-255 to +255]
 	                gamma: 0, // Image gamma correction [0.01 to 7.99]
 	                grayscale: 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
-	                shadesOfGray: 256 // Number of shades of gray [2-256]
+	                shadesOfGray: 256, // Number of shades of gray [2-256]
+	                invertColor: false // Invert color...
 	            },
 	
 	            progress: null, // On progress callbacks
@@ -133,9 +143,23 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	        // Init properties
 	
-	        // Uniforme ppi
+	        // Milling settings
 	        var _this = _possibleConstructorReturn(this, (RasterToGcode.__proto__ || Object.getPrototypeOf(RasterToGcode)).call(this, settings));
 	
+	        if (_this.milling) {
+	            if (_this.zSafe < _this.zSurface) {
+	                throw new Error('"zSafe" must be greater to "zSurface"');
+	            }
+	
+	            _this.passes = Math.abs(Math.floor(_this.zDepth / _this.passDepth));
+	        }
+	
+	        // Negative beam size ?
+	        if (_this.toolDiameter <= 0) {
+	            throw new Error('"toolDiameter" must be positive');
+	        }
+	
+	        // Uniforme ppi
 	        if (!_this.ppi.x) {
 	            _this.ppi = { x: _this.ppi, y: _this.ppi };
 	        }
@@ -150,12 +174,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	        // Calculate scale ratio
 	        _this.scaleRatio = {
-	            x: _this.ppm.x / _this.beamSize,
-	            y: _this.ppm.y / _this.beamSize
+	            x: _this.ppm.x / _this.toolDiameter,
+	            y: _this.ppm.y / _this.toolDiameter
 	        };
 	
 	        // State...
 	        _this.gcode = null;
+	        _this.gcodes = null;
 	        _this.currentLine = null;
 	        _this.lastCommands = null;
 	
@@ -167,7 +192,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        _this.G0 = ['G', _this.burnWhite ? 1 : 0];
 	
 	        // Calculate beam offset
-	        _this.beamOffset = _this.beamSize * 1000 / 2000;
+	        _this.beamOffset = _this.toolDiameter * 1000 / 2000;
 	
 	        // Calculate real beam range
 	        _this.realBeamRange = {
@@ -176,8 +201,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	        };
 	
 	        // Adjuste feed rate to mm/min
-	        if (_this.feedUnit === 'mm/sec') {
+	        if (_this.rateUnit === 'mm/sec') {
 	            _this.feedRate *= 60;
+	            _this.rapidRate *= 60;
 	        }
 	
 	        // register user callbacks
@@ -197,8 +223,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	            // Calculate output size
 	            this.outputSize = {
-	                width: this.size.width * (this.beamSize * 1000) / 1000,
-	                height: this.size.height * (this.beamSize * 1000) / 1000
+	                width: this.size.width * (this.toolDiameter * 1000) / 1000,
+	                height: this.size.height * (this.toolDiameter * 1000) / 1000
 	            };
 	        }
 	
@@ -209,6 +235,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        value: function run(settings) {
 	            // Reset state
 	            this.gcode = [];
+	            this.gcodes = [];
 	            this.lastCommands = {};
 	            this.currentLine = null;
 	
@@ -243,7 +270,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	        key: '_addHeader',
 	        value: function _addHeader() {
 	            // Base headers
-	            this.gcode.push('; Generated by LaserWeb (lw.raster-to-gcode.js)', '; Size       : ' + this.outputSize.width + ' x ' + this.outputSize.height + ' mm', '; PPI        : x: ' + this.ppi.x + ' - y: ' + this.ppi.y, '; PPM        : x: ' + this.ppm.x + ' - y: ' + this.ppm.y, '; Beam size  : ' + this.beamSize + ' mm', '; Beam range : ' + this.beamRange.min + ' to ' + this.beamRange.max, '; Beam power : ' + this.beamPower.min + ' to ' + this.beamPower.max + ' %', '; Feed rate  : ' + this.feedRate + ' mm/min');
+	            this.gcode.push('; Generated by LaserWeb (lw.raster-to-gcode.js)', '; Size       : ' + this.outputSize.width + ' x ' + this.outputSize.height + ' mm', '; PPI        : x: ' + this.ppi.x + ' - y: ' + this.ppi.y, '; PPM        : x: ' + this.ppm.x + ' - y: ' + this.ppm.y, '; Tool diam. : ' + this.toolDiameter + ' mm', '; Rapid rate : ' + this.rapidRate + ' ' + this.rateUnit, '; Feed rate  : ' + this.feedRate + ' ' + this.rateUnit);
+	
+	            if (this.milling) {
+	                this.gcode.push('; Z safe     : ' + this.zSafe, '; Z surface  : ' + this.zSurface, '; Z depth    : ' + this.zDepth);
+	            } else {
+	                this.gcode.push('; Beam range : ' + this.beamRange.min + ' to ' + this.beamRange.max, '; Beam power : ' + this.beamPower.min + ' to ' + this.beamPower.max + ' %');
+	            }
 	
 	            // Print activated options
 	            var options = ['smoothing', 'trimLine', 'joinPixel', 'burnWhite', 'verboseG', 'diagonal'];
@@ -259,7 +292,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            }
 	
 	            // Set feed rates
-	            this.gcode.push('', 'G0 F' + this.feedRate, 'G1 F' + this.feedRate, '');
+	            this.gcode.push('', 'G0 F' + this.rapidRate, 'G1 F' + this.feedRate, '');
 	        }
 	
 	        // Map S value to pixel power
@@ -267,7 +300,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: '_mapPixelPower',
 	        value: function _mapPixelPower(value) {
-	            return value * (this.realBeamRange.max - this.realBeamRange.min) / 255 + this.realBeamRange.min;
+	            var range = this.milling ? { min: 0, max: this.zDepth } : this.realBeamRange;
+	            return value * (range.max - range.min) / 255 + range.min;
 	        }
 	
 	        // Compute and return a command, return null if not changed
@@ -342,14 +376,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	            // Commands
 	            point.G = point.s ? ['G', 1] : this.G0;
-	            point.X = point.x * this.beamSize + this.offsets.X;
-	            point.Y = point.y * this.beamSize + this.offsets.Y;
+	            point.X = point.x * this.toolDiameter + this.offsets.X;
+	            point.Y = point.y * this.toolDiameter + this.offsets.Y;
 	            point.S = this._mapPixelPower(point.s);
 	
 	            // Offsets
 	            if (this.diagonal) {
 	                // Vertical offset
-	                point.Y += this.beamSize;
+	                point.Y += this.toolDiameter;
 	
 	                // Horizontal offset
 	                if (point.first || point.lastWhite) {
@@ -472,6 +506,137 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: '_processCurrentLine',
 	        value: function _processCurrentLine(reversed) {
+	            if (this.milling) {
+	                return this._processMillingLine(reversed);
+	            }
+	
+	            return this._processLaserLine(reversed);
+	        }
+	
+	        // Process current line and return an array of GCode text lines
+	
+	    }, {
+	        key: '_processMillingLine',
+	        value: function _processMillingLine(reversed) {
+	            var _this2 = this;
+	
+	            // Skip empty line
+	            if (!this._trimCurrentLine()) {
+	                return null;
+	            }
+	
+	            // Join pixel with same power
+	            if (this.joinPixel) {
+	                this._reduceCurrentLine();
+	            }
+	
+	            // Mark first and last point on the current line
+	            this.currentLine[0].first = true;
+	            this.currentLine[this.currentLine.length - 1].last = true;
+	
+	            // Reversed line ?
+	            if (reversed) {
+	                this.currentLine = this.currentLine.reverse();
+	            }
+	
+	            // Point index
+	            var point = void 0,
+	                index = 0;
+	
+	            // Init loop vars...
+	            var command = void 0,
+	                gcode = [];
+	
+	            var addCommand = function addCommand() {
+	                command = _this2._command.apply(_this2, arguments);
+	                command && gcode.push(command);
+	            };
+	
+	            // Get first point
+	            point = this._getPoint(index);
+	
+	            var plung = false;
+	            var Z = void 0,
+	                zMax = void 0;
+	
+	            var pass = function pass(passNum) {
+	                // Move to start of the line
+	                addCommand(['G', 0], ['Z', _this2.zSafe]);
+	                addCommand(['G', 0], ['X', point.X], ['Y', point.Y]);
+	                addCommand(['G', 0], ['Z', _this2.zSurface]);
+	
+	                // For each point on the line
+	                while (point) {
+	                    if (point.S) {
+	                        if (plung) {
+	                            addCommand(['G', 0], ['Z', _this2.zSurface]);
+	                            plung = false;
+	                        }
+	
+	                        Z = point.S;
+	                        zMax = _this2.passDepth * passNum;
+	
+	                        // Last pass
+	                        if (passNum < _this2.passes) {
+	                            Z = Math.max(Z, -zMax);
+	                        }
+	
+	                        addCommand(['G', 1], ['Z', _this2.zSurface + Z]);
+	                        addCommand(['G', 1], ['X', point.X], ['Y', point.Y]);
+	                    } else {
+	                        if (plung) {
+	                            addCommand(['G', 1], ['Z', _this2.zSurface]);
+	                            plung = false;
+	                        }
+	
+	                        addCommand(['G', 0], ['Z', _this2.zSafe]);
+	                        addCommand(['G', 0], ['X', point.X], ['Y', point.Y]);
+	                    }
+	
+	                    if (point.lastWhite || point.lastColored) {
+	                        plung = true;
+	                    }
+	
+	                    // Get next point
+	                    point = _this2._getPoint(++index);
+	                }
+	
+	                // Move to Z safe
+	                addCommand(['G', 1], ['Z', _this2.zSurface]);
+	                addCommand(['G', 0], ['Z', _this2.zSafe]);
+	            };
+	
+	            for (var i = 1; i <= this.passes; i++) {
+	                pass(i);
+	
+	                if (!gcode.length) {
+	                    break;
+	                }
+	
+	                if (this.gcodes.length < i) {
+	                    this.gcodes.push([]);
+	                } else {
+	                    this.gcodes[i - 1].push.apply(this.gcodes[i - 1], gcode);
+	                }
+	
+	                index = 0;
+	                gcode = [];
+	                point = this._getPoint(index);
+	
+	                this.lastCommands = {};
+	            }
+	
+	            // Not sure what to return...
+	            return null;
+	        }
+	
+	        // Process current line and return an array of GCode text lines
+	
+	    }, {
+	        key: '_processLaserLine',
+	        value: function _processLaserLine(reversed) {
+	            var _this3 = this;
+	
 	            // Trim trailing white spaces ?
 	            if (this.trimLine && !this._trimCurrentLine()) {
 	                // Skip empty line
@@ -505,18 +670,21 @@ return /******/ (function(modules) { // webpackBootstrap
 	            var command = void 0,
 	                gcode = [];
 	
+	            var addCommand = function addCommand() {
+	                command = _this3._command.apply(_this3, arguments);
+	                command && gcode.push(command);
+	            };
+	
 	            // Get first point
 	            point = this._getPoint(index);
 	
 	            // Move to start of the line
-	            command = this._command(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0]);
-	            command && gcode.push(command);
+	            addCommand(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0]);
 	
 	            // For each point on the line
 	            while (point) {
 	                // Burn to next point
-	                command = this._command(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S]);
-	                command && gcode.push(command);
+	                addCommand(point.G, ['X', point.X], ['Y', point.Y], ['S', point.S]);
 	
 	                // Get next point
 	                point = this._getPoint(++index);
@@ -536,7 +704,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: '_scanHorizontally',
 	        value: function _scanHorizontally(nonBlocking) {
-	            var _this2 = this;
+	            var _this4 = this;
 	
 	            // Init loop vars
 	            var x = 0,
@@ -554,7 +722,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	            var computeCurrentLine = function computeCurrentLine() {
 	                // Reset current line
-	                _this2.currentLine = [];
+	                _this4.currentLine = [];
 	
 	                // Reset point object
 	                point = null;
@@ -562,7 +730,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                // For each pixel on the line
 	                for (x = 0; x <= w; x++) {
 	                    // Get pixel power
-	                    s = p = _this2._getPixelPower(x, y, p);
+	                    s = p = _this4._getPixelPower(x, y, p);
 	
 	                    // Is last white/colored pixel
 	                    lastWhite = point && !point.p && p;
@@ -581,7 +749,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    lastColored && (point.lastColored = true);
 	
 	                    // Add point to current line
-	                    _this2.currentLine.push(point);
+	                    _this4.currentLine.push(point);
 	                }
 	            };
 	
@@ -590,12 +758,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	            var processCurrentLine = function processCurrentLine() {
 	                // Process pixels line
-	                gcode = _this2._processCurrentLine(reversed);
+	                gcode = _this4._processCurrentLine(reversed);
 	
 	                // Call progress callback
 	                percent = Math.round(y / h * 100);
 	                if (percent > lastPercent) {
-	                    _this2._onProgress({ gcode: gcode, percent: percent });
+	                    _this4._onProgress({ gcode: gcode, percent: percent });
 	                }
 	                lastPercent = percent;
 	
@@ -608,7 +776,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                reversed = !reversed;
 	
 	                // Concat line
-	                _this2.gcode.push.apply(_this2.gcode, gcode);
+	                _this4.gcode.push.apply(_this4.gcode, gcode);
 	            };
 	
 	            var processNextLine = function processNextLine() {
@@ -624,7 +792,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	                        processNextLine();
 	                    }
 	                } else {
-	                    _this2._onDone({ gcode: _this2.gcode });
+	                    if (_this4.milling) {
+	                        _this4.gcodes.forEach(function (gcode) {
+	                            _this4.gcode.push.apply(_this4.gcode, gcode);
+	                        });
+	                    }
+	
+	                    _this4._onDone({ gcode: _this4.gcode });
 	                }
 	            };
 	
@@ -641,7 +815,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: '_scanDiagonally',
 	        value: function _scanDiagonally(nonBlocking) {
-	            var _this3 = this;
+	            var _this5 = this;
 	
 	            // Init loop vars
 	            var x = 0,
@@ -661,7 +835,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	            var computeCurrentLine = function computeCurrentLine(x, y) {
 	                // Reset current line
-	                _this3.currentLine = [];
+	                _this5.currentLine = [];
 	
 	                // Reset point object
 	                point = null;
@@ -681,7 +855,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    }
 	
 	                    // Get pixel power
-	                    s = p = _this3._getPixelPower(x, y, p);
+	                    s = p = _this5._getPixelPower(x, y, p);
 	
 	                    // Is last white/colored pixel
 	                    lastWhite = point && !point.p && p;
@@ -700,7 +874,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    lastColored && (point.lastColored = true);
 	
 	                    // Add the new point
-	                    _this3.currentLine.push(point);
+	                    _this5.currentLine.push(point);
 	
 	                    // Next coords
 	                    x++;
@@ -713,12 +887,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	            var processCurrentLine = function processCurrentLine() {
 	                // Process pixels line
-	                gcode = _this3._processCurrentLine(reversed);
+	                gcode = _this5._processCurrentLine(reversed);
 	
 	                // Call progress callback
 	                percent = Math.round(lineNum / totalLines * 100);
 	                if (percent > lastPercent) {
-	                    _this3._onProgress({ gcode: gcode, percent: percent });
+	                    _this5._onProgress({ gcode: gcode, percent: percent });
 	                }
 	                lastPercent = percent;
 	
@@ -731,7 +905,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                reversed = !reversed;
 	
 	                // Concat line
-	                _this3.gcode.push.apply(_this3.gcode, gcode);
+	                _this5.gcode.push.apply(_this5.gcode, gcode);
 	            };
 	
 	            var processNextLine = function processNextLine() {
@@ -752,7 +926,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                        processNextLine();
 	                    }
 	                } else {
-	                    _this3._onDone({ gcode: _this3.gcode });
+	                    _this5._onDone({ gcode: _this5.gcode });
 	                }
 	            };
 	
@@ -781,7 +955,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: 'on',
 	        value: function on(event, callback, context) {
-	            var _this4 = this;
+	            var _this6 = this;
 	
 	            var method = '_on' + event[0].toUpperCase() + event.slice(1);
 	
@@ -790,7 +964,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            }
 	
 	            this[method] = function (event) {
-	                return callback.call(context || _this4, event);
+	                return callback.call(context || _this6, event);
 	            };
 	
 	            return this;
@@ -801,7 +975,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, {
 	        key: 'getHeightMap',
 	        value: function getHeightMap(settings) {
-	            var _this5 = this;
+	            var _this7 = this;
 	
 	            // Init loop vars{
 	            var heightMap = [];
@@ -833,14 +1007,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	                // For each pixel on the line
 	                for (x = 0; x < w; x++) {
-	                    pixels.push(_this5._mapPixelPower(_this5._getPixelPower(x, y)));
+	                    pixels.push(_this7._mapPixelPower(_this7._getPixelPower(x, y)));
 	                }
 	
 	                // Call progress callback
 	                percent = Math.round(y / h * 100);
 	
 	                if (percent > lastPercent) {
-	                    onProgress.call(settings.progressContext || _this5, { pixels: pixels, percent: percent });
+	                    onProgress.call(settings.progressContext || _this7, { pixels: pixels, percent: percent });
 	                }
 	
 	                lastPercent = percent;
@@ -861,7 +1035,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                        processNextLine();
 	                    }
 	                } else {
-	                    onDone.call(settings.doneContext || _this5, { heightMap: heightMap });
+	                    onDone.call(settings.doneContext || _this7, { heightMap: heightMap });
 	                }
 	            };
 	
@@ -1317,6 +1491,14 @@ return /******/ (function(modules) { // webpackBootstrap
 			}
 			
 			// Filters ...
+			function invertColor(data, i, value) {
+			    if (value) {
+			        data[i] = color(255 - data[i]);
+			        data[i + 1] = color(255 - data[i + 1]);
+			        data[i + 2] = color(255 - data[i + 2]);
+			    }
+			}
+			
 			function brightness(data, i, value) {
 			    if (value !== undefined) {
 			        data[i] = color(data[i] + value);
@@ -1433,7 +1615,8 @@ return /******/ (function(modules) { // webpackBootstrap
 			        contrast: 0, // Image contrast [-255 to +255]
 			        gamma: 0, // Image gamma correction [0.01 to 7.99]
 			        grayscale: 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
-			        shadesOfGray: 256 // Number of shades of gray [2-256]
+			        shadesOfGray: 256, // Number of shades of gray [2-256]
+			        invertColor: false // Invert color...
 			    }, settings || {});
 			
 			    // Get canvas 2d context
@@ -1478,6 +1661,7 @@ return /******/ (function(modules) { // webpackBootstrap
 			    // For each pixel
 			    for (var i = 0, il = data.length; i < il; i += 4) {
 			        // Apply filters
+			        invertColor(data, i, settings.invertColor);
 			        brightness(data, i, brightnessOffset);
 			        contrast(data, i, contrastFactor);
 			        gamma(data, i, gammaCorrection);

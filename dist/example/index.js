@@ -7,11 +7,19 @@ var file, gcode, heightMap, rasterToGcode;
 var settings = {
     ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
-    beamSize : 0.1,                  // Beam size in millimeters
+    toolDiameter: 0.1,      // Tool diameter in millimeters
+    rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value)
+    feedRate    : 500,      // Feed rate in mm/min (G1 F value)
+    rateUnit    : 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
+
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
     beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
-    feedRate : 1500,                 // Feed rate in mm/min (F value)
-    feedUnit : 'mm/min',             // Feed rate unit [mm/min, mm/sec]
+
+    milling  : false, // EXPERIMENTAL
+    zSafe    : 5,     // Safe Z for fast move
+    zSurface : 0,     // Usinable surface (white pixels)
+    zDepth   : -10,   // Z depth (black pixels)
+    passDepth: 1,     // Pass depth in millimeters
 
     offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
     trimLine : true,           // Trim trailing white pixels
@@ -19,6 +27,7 @@ var settings = {
     burnWhite: true,           // [true = G1 S0 | false = G0] on inner white pixels
     verboseG : false,          // Output verbose GCode (print each commands)
     diagonal : false,          // Go diagonally (increase the distance between points)
+    overscan : 0,              // Add some extra white space (in millimeters) before and after each line
 
     precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
 
@@ -30,7 +39,8 @@ var settings = {
         contrast    : 0,      // Image contrast [-255 to +255]
         gamma       : 0,      // Image gamma correction [0.01 to 7.99]
         grayscale   : 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
-        shadesOfGray: 256     // Number of shades of gray [2-256]
+        shadesOfGray: 256,    // Number of shades of gray [2-256]
+        invertColor : false   // Invert color...
     },
 
     progress       : null, // On progress callbacks
@@ -38,10 +48,77 @@ var settings = {
 
     done       : null, // On done callback
     doneContext: null  // On done callback context
+};
+
+var settingsVersion = '0.1.2';
+settings.___toggles = {};
+
+function loadSettings() {
+    var store = JSON.parse(localStorage.getItem('lw.raster-to-gcode'));
+
+    if (store) {
+        if (! store.settingsVersion || store.settingsVersion !== settingsVersion) {
+            settings.settingsVersion = settingsVersion;
+            saveSettings();
+        }
+        else {
+            settings = store;
+        }
+    }
+
+    $settings.find('select, input').each(function() {
+        var keys    = this.id.split('-');
+        var mainKey = keys.shift();
+        var subKey  = keys.shift();
+
+        var value = settings[mainKey];
+
+        if (subKey) {
+            if (! value) {
+                return;
+            }
+            value = value[subKey];
+        }
+
+        if (this.type === 'checkbox') {
+            $(this).prop('checked', value);
+        }
+        else {
+            $(this).val(value);
+        }
+    });
+
+    $filters.find('select, input').each(function() {
+        var value = settings.filters[this.id];
+
+        if (this.type === 'checkbox') {
+            $(this).prop('checked', value);
+        }
+        else {
+            $(this).val(value);
+        }
+    });
+
+    for (var section in settings.___toggles) {
+        var $section = $(section);
+        var $toggle  = $section.find('h3 i.toggle');
+        var $items   = $section.children('label, hr');
+        var visible  = settings.___toggles[section];
+
+        $toggle.toggleClass('fa-caret-up', visible).toggleClass('fa-caret-down', !visible);
+        $items.toggle(visible);
+    }
+}
+
+function saveSettings() {
+    localStorage.setItem('lw.raster-to-gcode', JSON.stringify(settings));
 }
 
 // Load file...
 function loadFile() {
+    // Save settings
+    saveSettings();
+
     console.log('file:', file);
     $downloadGCode.hide();
     $downloadHeightMap.hide();
@@ -57,6 +134,7 @@ function loadFile() {
     .on('done', function(event) {
         console.log('onDone: lines:', event.gcode.length);
         gcode = event.gcode.join('\n');
+        $progressBar.css('width', '0%').html('0%');
         $progressBar.parent().hide();
         $downloadGCode.show();
     });
@@ -64,6 +142,8 @@ function loadFile() {
     // <file> can be Image, File URL object or URL string (http://* or data:image/*)
     rasterToGcode.load(file).then(function(rtg) {
         console.log('rasterToGcode:', rtg);
+        $explorer.removeClass('left');
+        $explorer.addClass('right');
         drawCanvasGrid(rtg);
     })
     .catch(function(error) {
@@ -113,21 +193,16 @@ function downloadHeightMap() {
 
 // UI --------------------------------------------------------------------------
 
-var $canvasWrapper     = $('#canvasWrapper');
-var $fileName          = $('#fileName');
-var $fileSize          = $('#fileSize');
-var $noFile            = $('.noFile');
-var $hasFile           = $('.hasFile');
-var $file              = $('#file');
-var $pixel             = $('#pixel');
-var $filters           = $('.filters');
-var $settings          = $('.settings');
-var $ppm               = $('#ppm');
-var $toGCode           = $('#toGCode');
-var $toHeightMap       = $('#toHeightMap');
-var $downloadGCode     = $('#downloadGCode');
-var $downloadHeightMap = $('#downloadHeightMap');
-var $imageSize         = $('#imageSize');
+// Map all elements id
+$('*[id]').each(function() {
+    window['$' + this.id] = $(this);
+});
+
+var $noFile   = $('.noFile');
+var $hasFile  = $('.hasFile');
+var $filters  = $('.filters');
+var $settings = $('.settings');
+var $toggles  = $('h3 i.toggle');
 
 var $pixelRGBA   = $pixel.find('.rgba');
 var $pixelColor  = $pixel.find('.color');
@@ -159,6 +234,9 @@ function drawCanvasGrid(cg) {
 }
 
 $(document).ready(function() {
+    // Load stored settings
+    loadSettings();
+
     // On file input change
     $file.on('change', function(event) {
         file = event.target.files[0];
@@ -226,7 +304,7 @@ $(document).ready(function() {
         if (this.type === 'checkbox') {
             value = this.checked;
         }
-        else if (mainKey !== 'feedUnit') {
+        else if (mainKey !== 'rateUnit') {
             value = parseFloat(value);
         }
 
@@ -251,8 +329,29 @@ $(document).ready(function() {
             value = parseFloat(value);
         }
 
+        if (this.type === 'checkbox') {
+            value = this.checked;
+        }
+
         settings.filters[this.id] = value;
 
         loadFile();
     });
+
+    $toggles.on('click', function() {
+        var $toggle  = $(this);
+        var $section = $toggle.parent().parent();
+        var $items   = $section.children('label, hr');
+
+        $toggle.toggleClass('fa-caret-up').toggleClass('fa-caret-down');
+        $items.toggle();
+
+        var classNames = $section.attr('class');
+        var selector   = $.trim(classNames).replace(/\s+/gi, '.');
+        var visible    = $toggle.hasClass('fa-caret-up');
+
+        settings.___toggles['.' + selector] = visible;
+
+        saveSettings();
+    })
 });

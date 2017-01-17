@@ -60,7 +60,6 @@ input {
 
 #explorer {
     top: 15px;
-    left: 15px;
     bottom: 15px;
     padding: 10px;
     z-index: 1000;
@@ -71,11 +70,24 @@ input {
     overflow-y: auto;
 }
 
+#explorer.left {
+    left: 15px;
+}
+
+#explorer.right {
+    right: 15px;
+}
+
 #explorer h3 {
     margin: 0;
     padding: 0 5px;
     font-size: 1.6em;
     margin-bottom: 15px;
+}
+
+#explorer h3 i.toggle {
+    font-size: 14px;
+    font-weight: normal;
 }
 
 #explorer hr {

@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-    <div id="explorer">
+    <div id="explorer" class="left">
         <div>
             <label class="btn btn-primary btn-xs btn-file">
                 Browse… <input id="file" type="file" accept="image/*" multiple="false" />
@@ -29,7 +29,7 @@
             </button>
         </div>
         <div class="progress">
-            <div class="progress-bar progress-bar-success progress-bar-striped" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="min-width: 2em;">0%</div>
+            <div class="progress-bar progress-bar-success progress-bar-striped" style="min-width: 2em;">0%</div>
         </div>
         <span class="noFile">No file selected !</span>
         <div id="controls" class="hasFile">
@@ -43,7 +43,7 @@
                 </label>
             </div>
             <div class="section image settings">
-                <h3>Image settings</h3>
+                <h3>Image settings <i class="fa fa-caret-up pull-right toggle"></i></h3>
                 <label>
                     <span class="label">PPI (x/y):</span>
                     <input id="ppi-x" type="number" placeholder="254" value="254" min="1" max="1000" step="0.1" /> -
@@ -60,13 +60,12 @@
                 </label>
             </div>
             <div class="section image filters">
-                <h3>Image filters</h3>
-                <label>
-                    <span class="label">Smoothing:</span>
-                    <select id="smoothing">
-                        <option value="0">no</option>
-                        <option value="1">yes</option>
-                    </select>
+                <h3>Image filters <i class="fa fa-caret-up pull-right toggle"></i></h3>
+                <label class="control">
+                    <input id="smoothing" type="checkbox" checked /> Smoothing
+                </label>
+                <label class="control">
+                    <input id="invertColor" type="checkbox" checked /> Invert colors
                 </label>
                 <hr />
                 <label>
@@ -92,35 +91,71 @@
                 <label><span class="label">Contrast  :</span> <input id="contrast" type="number" placeholder="0" value="0" min="-255" max="255" step="1" /></label>
                 <label><span class="label">Gamma     :</span> <input id="gamma" type="number" placeholder="0" value="1" min="0" max="3" step="0.01" /></label>
             </div>
-            <div class="section laser settings">
-                <h3>Laser settings</h3>
+            <div class="section machine settings">
+                <h3>Machine settings <i class="fa fa-caret-up pull-right toggle"></i></h3>
                 <label>
-                    <span class="label">Beam size    :</span>
-                    <input id="beamSize" type="number" min="0.01" max="10" step="0.01" placeholder="0.1" value="0.1" />
+                    <span class="label">Tool diameter:</span>
+                    <input id="toolDiameter" type="number" min="0.01" max="10" step="0.01" placeholder="0.1" value="0.1" />
                     <span class="unit">mm</span>
                 </label>
                 <label>
-                    <span class="label">Beam range   :</span>
-                    <input id="beamRange-min" type="number" min="0" max="1000" placeholder="0" value="0" disabled /> -
-                    <input id="beamRange-max" type="number" min="1" max="1000" placeholder="1" value="1" />
+                    <span class="label">Rapid rate (G0):</span>
+                    <input id="rapidRate" type="number" min="1" max="100000" step="1" placeholder="1500" value="1500" />
                 </label>
                 <label>
-                    <span class="label">Beam power   :</span>
-                    <input id="beamPower-min" type="number" min="0" max="100" step="1" placeholder="0" value="0" /> -
-                    <input id="beamPower-max" type="number" min="1" max="100" step="1" placeholder="100" value="100" />
-                    <span class="unit">%</span>
+                    <span class="label">Feed rate (G1) :</span>
+                    <input id="feedRate" type="number" min="1" max="100000" step="1" placeholder="500" value="500" />
                 </label>
                 <label>
-                    <span class="label">Feed rate    :</span>
-                    <input id="feedRate" type="number" min="1" max="100000" step="1" placeholder="1500" value="1500" /> -
-                    <select id="feedUnit">
+                    <span class="label">Rate units     :</span>
+                    <select id="rateUnit">
                         <option>mm/min</option>
                         <option>mm/sec</option>
                     </select>
                 </label>
             </div>
+            <div class="section laser settings">
+                <h3>Laser settings <i class="fa fa-caret-up pull-right toggle"></i></h3>
+                <label>
+                    <span class="label">Beam range:</span>
+                    <input id="beamRange-min" type="number" min="0" max="1000" placeholder="0" value="0" disabled /> -
+                    <input id="beamRange-max" type="number" min="1" max="1000" placeholder="1" value="1" />
+                </label>
+                <label>
+                    <span class="label">Beam power:</span>
+                    <input id="beamPower-min" type="number" min="0" max="100" step="1" placeholder="0" value="0" /> -
+                    <input id="beamPower-max" type="number" min="1" max="100" step="1" placeholder="100" value="100" />
+                    <span class="unit">%</span>
+                </label>
+            </div>
+            <div class="section milling settings">
+                <h3>Milling settings <i class="fa fa-caret-up pull-right toggle"></i></h3>
+                <label class="control">
+                    <input id="milling" type="checkbox" /> Enable (EXPERIMENTAL)
+                </label>
+                <label>
+                    <span class="label">Z safe           :</span>
+                    <input id="zSafe" type="number" placeholder="5" value="5" />
+                    <span class="unit">mm</span>
+                </label>
+                <label>
+                    <span class="label">Z surface (white):</span>
+                    <input id="zSurface" type="number" placeholder="0" value="0" />
+                    <span class="unit">mm</span>
+                </label>
+                <label>
+                    <span class="label">Z depth (black)  :</span>
+                    <input id="zDepth" type="number" placeholder="0" value="0" />
+                    <span class="unit">mm</span>
+                </label>
+                <label>
+                    <span class="label">Pass depth       :</span>
+                    <input id="passDepth" type="number" placeholder="0" value="0" />
+                    <span class="unit">mm</span>
+                </label>
+            </div>
             <div class="section gcode settings">
-                <h3>G-Code settings</h3>
+                <h3>G-Code settings <i class="fa fa-caret-up pull-right toggle"></i></h3>
                 <label>
                     <span class="label">Overscan     :</span>
                     <input id="overscan" type="number" placeholder="0" min="0" placeholder="0" value="0" />

@@ -30,11 +30,19 @@ Or download the last build from https://raw.githubusercontent.com/lautr3k/lw.ras
 let settings = {
     ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
-    beamSize : 0.1,                  // Beam size in millimeters
+    toolDiameter: 0.1,      // Tool diameter in millimeters
+    rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value)
+    feedRate    : 500,      // Feed rate in mm/min (G1 F value)
+    rateUnit    : 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
+
     beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
     beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
-    feedRate : 1500,                 // Feed rate in mm/min (F value)
-    feedUnit : 'mm/min',             // Feed rate unit [mm/min, mm/sec]
+
+    milling  : false, // EXPERIMENTAL
+    zSafe    : 5,     // Safe Z for fast move
+    zSurface : 0,     // Usinable surface (white pixels)
+    zDepth   : -10,   // Z depth (black pixels)
+    passDepth: 1,     // Pass depth in millimeters
 
     offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
     trimLine : true,           // Trim trailing white pixels
@@ -53,7 +61,8 @@ let settings = {
         contrast    : 0,      // Image contrast [-255 to +255]
         gamma       : 0,      // Image gamma correction [0.01 to 7.99]
         grayscale   : 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
-        shadesOfGray: 256     // Number of shades of gray [2-256]
+        shadesOfGray: 256,    // Number of shades of gray [2-256]
+        invertColor : false   // Invert color...
     },
 
     progress       : null, // On progress callbacks
