@@ -48,11 +48,17 @@ class RasterToGcode extends CanvasGrid {
             progressContext: null, // On progress callback context
 
             done       : null, // On done callback
-            doneContext: null  // On done callback context
+            doneContext: null,  // On done callback context
+
+            abort      : null,
+            abortContext: null
         }, settings || {})
 
         // Init properties
         super(settings)
+
+        // Run flag
+        this.running=false;
 
         // Milling settings
         if (this.milling) {
@@ -118,6 +124,7 @@ class RasterToGcode extends CanvasGrid {
         // register user callbacks
         this.progress && this.on('progress', this.progress, this.progressContext)
         this.done && this.on('done', this.done, this.doneContext)
+        this.abort && this.on('abort', this.abort, this.abortContext)
     }
 
     // Process image
@@ -139,6 +146,7 @@ class RasterToGcode extends CanvasGrid {
         this.gcodes       = []
         this.lastCommands = {}
         this.currentLine  = null
+        this.running=true;
 
         // Defaults settings
         settings = settings || {}
@@ -165,9 +173,15 @@ class RasterToGcode extends CanvasGrid {
         }
 
         if (! nonBlocking) {
+            this.running=false;
             return this.gcode
         }
     }
+
+    stop() {
+        if (this.running) this.running=false;
+    }
+    
 
     _addHeader() {
         // Base headers
@@ -665,11 +679,15 @@ class RasterToGcode extends CanvasGrid {
             y++
 
             if (y < h) {
-                if (nonBlocking) {
-                    setTimeout(processNextLine, 0)
-                }
-                else {
-                    processNextLine()
+                if (this.running){
+                    if (nonBlocking) {
+                        setTimeout(processNextLine, 0)
+                    }
+                    else {
+                        processNextLine()
+                    }
+                } else {
+                    this._onAbort()
                 }
             }
             else {
@@ -678,7 +696,7 @@ class RasterToGcode extends CanvasGrid {
                         this.gcode.push.apply(this.gcode, gcode)
                     })
                 }
-
+                this.running=false;
                 this._onDone({ gcode: this.gcode })
             }
         }
@@ -824,6 +842,10 @@ class RasterToGcode extends CanvasGrid {
 
     _onDone(event) {
         //console.log('done:', event.gcode.length);
+    }
+
+    _onAbort(event) {
+
     }
 
     on(event, callback, context) {
