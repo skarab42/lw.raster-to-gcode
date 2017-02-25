@@ -178,7 +178,7 @@ class RasterToGcode extends CanvasGrid {
         }
     }
 
-    stop() {
+    terminate() {
         if (this.running) this.running=false;
     }
     
@@ -811,14 +811,19 @@ class RasterToGcode extends CanvasGrid {
             }
 
             if (y < h && x < w) {
-                if (nonBlocking) {
-                    setTimeout(processNextLine, 0)
-                }
-                else {
-                    processNextLine()
+                if (this.running){
+                    if (nonBlocking) {
+                        setTimeout(processNextLine, 0)
+                    }
+                    else {
+                        processNextLine()
+                    }
+                } else {
+                    this._onAbort();
                 }
             }
             else {
+                this.running=false;
                 this._onDone({ gcode: this.gcode })
             }
         }
@@ -914,14 +919,19 @@ class RasterToGcode extends CanvasGrid {
             y++
 
             if (y < h) {
-                if (nonBlocking) {
-                    setTimeout(processNextLine, 0)
-                }
-                else {
-                    processNextLine()
+                if (this.running) {
+                    if (nonBlocking) {
+                        setTimeout(processNextLine, 0)
+                    }
+                    else {
+                        processNextLine()
+                    }
+                } else {
+                    this._onAbort()
                 }
             }
             else {
+                this.running=false
                 onDone.call(settings.doneContext || this, { heightMap })
             }
         }
