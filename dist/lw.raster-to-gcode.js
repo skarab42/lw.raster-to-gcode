@@ -99,17 +99,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	            ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 	
 	            toolDiameter: 0.1, // Tool diameter in millimeters
-	            rapidRate: 1500, // Feed rate in mm/min (G0 F value)
+	            rapidRate: 1500, // Rapid rate in mm/min (G0 F value)
 	            feedRate: 500, // Feed rate in mm/min (G1 F value)
-	            rateUnit: 'mm/min', // Feed rate unit [mm/min, mm/sec]
+	            rateUnit: 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
 	
 	            beamRange: { min: 0, max: 1 }, // Beam power range (Firmware value)
 	            beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
 	
 	            milling: false, // EXPERIMENTAL
 	            zSafe: 5, // Safe Z for fast move
-	            zSurface: 0, // Usinable surface
-	            zDepth: -10, // Z depth (min:white, max:black)
+	            zSurface: 0, // Usinable surface (white pixels)
+	            zDepth: -10, // Z depth (black pixels)
 	            passDepth: 1, // Pass depth in millimeters
 	
 	            offsets: { X: 0, Y: 0 }, // Global coordinates offsets
@@ -138,14 +138,20 @@ return /******/ (function(modules) { // webpackBootstrap
 	            progressContext: null, // On progress callback context
 	
 	            done: null, // On done callback
-	            doneContext: null // On done callback context
+	            doneContext: null, // On done callback context
+	
+	            abort: null,
+	            abortContext: null
 	        }, settings || {});
 	
 	        // Init properties
 	
-	        // Milling settings
+	        // Run flag
 	        var _this = _possibleConstructorReturn(this, (RasterToGcode.__proto__ || Object.getPrototypeOf(RasterToGcode)).call(this, settings));
 	
+	        _this.running = false;
+	
+	        // Milling settings
 	        if (_this.milling) {
 	            if (_this.zSafe < _this.zSurface) {
 	                throw new Error('"zSafe" must be greater to "zSurface"');
@@ -209,6 +215,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        // register user callbacks
 	        _this.progress && _this.on('progress', _this.progress, _this.progressContext);
 	        _this.done && _this.on('done', _this.done, _this.doneContext);
+	        _this.abort && _this.on('abort', _this.abort, _this.abortContext);
 	        return _this;
 	    }
 	
@@ -238,6 +245,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            this.gcodes = [];
 	            this.lastCommands = {};
 	            this.currentLine = null;
+	            this.running = true;
 	
 	            // Defaults settings
 	            settings = settings || {};
@@ -263,8 +271,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	            }
 	
 	            if (!nonBlocking) {
+	                this.running = false;
 	                return this.gcode;
 	            }
+	        }
+	    }, {
+	        key: 'terminate',
+	        value: function terminate() {
+	            if (this.running) this.running = false;
 	        }
 	    }, {
 	        key: '_addHeader',
@@ -786,10 +800,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	                y++;
 	
 	                if (y < h) {
-	                    if (nonBlocking) {
-	                        setTimeout(processNextLine, 0);
+	                    if (_this4.running) {
+	                        if (nonBlocking) {
+	                            setTimeout(processNextLine, 0);
+	                        } else {
+	                            processNextLine();
+	                        }
 	                    } else {
-	                        processNextLine();
+	                        _this4._onAbort();
 	                    }
 	                } else {
 	                    if (_this4.milling) {
@@ -797,7 +815,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                            _this4.gcode.push.apply(_this4.gcode, gcode);
 	                        });
 	                    }
-	
+	                    _this4.running = false;
 	                    _this4._onDone({ gcode: _this4.gcode });
 	                }
 	            };
@@ -920,12 +938,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	                }
 	
 	                if (y < h && x < w) {
-	                    if (nonBlocking) {
-	                        setTimeout(processNextLine, 0);
+	                    if (_this5.running) {
+	                        if (nonBlocking) {
+	                            setTimeout(processNextLine, 0);
+	                        } else {
+	                            processNextLine();
+	                        }
 	                    } else {
-	                        processNextLine();
+	                        _this5._onAbort();
 	                    }
 	                } else {
+	                    _this5.running = false;
 	                    _this5._onDone({ gcode: _this5.gcode });
 	                }
 	            };
@@ -952,6 +975,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	        value: function _onDone(event) {
 	            //console.log('done:', event.gcode.length);
 	        }
+	    }, {
+	        key: '_onAbort',
+	        value: function _onAbort(event) {}
 	    }, {
 	        key: 'on',
 	        value: function on(event, callback, context) {
@@ -1029,12 +1055,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	                y++;
 	
 	                if (y < h) {
-	                    if (nonBlocking) {
-	                        setTimeout(processNextLine, 0);
+	                    if (_this7.running) {
+	                        if (nonBlocking) {
+	                            setTimeout(processNextLine, 0);
+	                        } else {
+	                            processNextLine();
+	                        }
 	                    } else {
-	                        processNextLine();
+	                        _this7._onAbort();
 	                    }
 	                } else {
+	                    _this7.running = false;
 	                    onDone.call(settings.doneContext || _this7, { heightMap: heightMap });
 	                }
 	            };
