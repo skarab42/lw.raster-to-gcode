@@ -65,11 +65,14 @@ let settings = {
         invertColor : false   // Invert color...
     },
 
-    progress       : null, // On progress callbacks
-    progressContext: null, // On progress callback context
+    onProgress       : null, // On progress callbacks
+    onProgressContext: null, // On progress callback context
 
-    done       : null, // On done callback
-    doneContext: null  // On done callback context
+    onDone       : null, // On done callback
+    onDoneContext: null, // On done callback context
+
+    onAbort       : null, // On abort callback
+    onAbortContext: null  // On abort callback context
 }
 ```
 
