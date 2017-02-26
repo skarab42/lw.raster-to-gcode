@@ -43,11 +43,14 @@ var settings = {
         invertColor : false   // Invert color...
     },
 
-    progress       : null, // On progress callbacks
-    progressContext: null, // On progress callback context
+    onProgress       : null, // On progress callbacks
+    onProgressContext: null, // On progress callback context
 
-    done       : null, // On done callback
-    doneContext: null  // On done callback context
+    onDone       : null, // On done callback
+    onDoneContext: null, // On done callback context
+
+    onAbort       : null, // On abort callback
+    onAbortContext: null  // On abort callback context
 };
 
 var settingsVersion = '0.1.2';
@@ -132,11 +135,27 @@ function loadFile() {
         $progressBar.css('width', event.percent + '%').html(event.percent + '%');
     })
     .on('done', function(event) {
-        console.log('onDone: lines:', event.gcode.length);
-        gcode = event.gcode.join('\n');
+        $toHeightMap.text('To HeightMap').removeClass('btn-danger');
+        $toGCode.text('To G-Code').removeClass('btn-danger');
         $progressBar.css('width', '0%').html('0%');
         $progressBar.parent().hide();
+
+        if (event.heightMap) {
+            console.log('onDone: heightMap:', event.heightMap.length);
+            heightMap = event.heightMap;
+            $downloadHeightMap.show();
+            return;
+        }
+
+        console.log('onDone: lines:', event.gcode.length);
+        gcode = event.gcode.join('\n');
         $downloadGCode.show();
+    })
+    .on('abort', function(event) {
+        console.log('onAbort:', event);
+        $toGCode.text('To G-Code').removeClass('btn-danger');
+        $toHeightMap.text('To HeightMap').removeClass('btn-danger');
+        $progressBar.html('Aborted at ' + $progressBar.html()).addClass('progress-bar-danger');
     });
 
     // <file> can be Image, File URL object or URL string (http://* or data:image/*)
@@ -153,7 +172,13 @@ function loadFile() {
 
 // To gcode
 function toGCode() {
+    if (rasterToGcode.running) {
+        return rasterToGcode.abort();
+    }
+
     console.log('toGCode:', file.name);
+    $toGCode.text('Abort').addClass('btn-danger');
+    $progressBar.removeClass('progress-bar-danger');
     $progressBar.parent().show();
     rasterToGcode.run();
 }
@@ -167,21 +192,15 @@ function downloadGCode() {
 
 // To height-map
 function toHeightMap() {
+    if (rasterToGcode.running) {
+        return rasterToGcode.abort();
+    }
+
     console.log('toHeightMap:', file.name);
-    heightMap = [];
+    $toHeightMap.text('Abort').addClass('btn-danger');
+    $progressBar.removeClass('progress-bar-danger');
     $progressBar.parent().show();
-    rasterToGcode.getHeightMap({
-        progress: function(event) {
-            console.log('onProgress:', event.percent);
-            $progressBar.css('width', event.percent + '%').html(event.percent + '%');
-            heightMap.push(event.pixels.join(','));
-        },
-        done: function(event) {
-            heightMap = heightMap.join('\n');
-            $progressBar.parent().hide();
-            $downloadHeightMap.show();
-        }
-    });
+    rasterToGcode.getHeightMap();
 }
 
 // Download height-map
