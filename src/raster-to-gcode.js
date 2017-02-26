@@ -77,8 +77,6 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Calculate PPM = Pixel Per Millimeters
-        // this.ppm = 2540 / (this.ppi * 100)
-        // this.ppm = parseFloat(this.ppm.toFixed(10))
         this.ppm = {
             x: parseFloat((2540 / (this.ppi.x * 100)).toFixed(10)),
             y: parseFloat((2540 / (this.ppi.y * 100)).toFixed(10))
@@ -275,7 +273,7 @@ class RasterToGcode extends CanvasGrid {
     _getPixelPower(x, y, defaultValue) {
         try {
             // Reverse Y value since canvas as top/left origin
-            y = this.size.height - y - 1;
+            y = this.size.height - y - 1
 
             // Get pixel info
             let pixel = this.getPixel(x, y)
@@ -710,11 +708,6 @@ class RasterToGcode extends CanvasGrid {
         }
 
         processNextLine()
-
-        // // For each image line
-        // for (y = 0; y < h; y++) {
-        //     processNextLine()
-        // }
     }
 
     // Parse diagonally
@@ -841,28 +834,18 @@ class RasterToGcode extends CanvasGrid {
         }
 
         processNextLine()
-
-        // // For each image line
-        // for (y = 0; y < h; y++) {
-        //     scanDiagonalLine(x, y)
-        // }
-        //
-        // // For each image column (exept the first one)
-        // for (x = 1, y--; x < w; x++) {
-        //     scanDiagonalLine(x, y)
-        // }
     }
 
     _onProgress(event) {
-        //console.log('progress:', event.percent);
+        //console.log('progress:', event.percent)
     }
 
     _onDone(event) {
-        //console.log('done:', event.gcode.length);
+        //console.log('done:', event.gcode.length)
     }
 
-    _onAbort(event) {
-        //console.log('abort', event);
+    _onAbort() {
+        //console.log('abort')
     }
 
     on(event, callback, context) {
@@ -896,10 +879,6 @@ class RasterToGcode extends CanvasGrid {
 
         // Register user callbacks
         this._registerUserCallbacks(settings)
-
-        // register user callbacks
-        //let onProgress = settings.progress || function() {}
-        //let onDone     = settings.done     || function() {}
 
         // Non blocking mode ?
         let nonBlocking = this.nonBlocking
