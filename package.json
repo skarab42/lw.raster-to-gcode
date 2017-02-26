@@ -1,6 +1,6 @@
 {
   "name": "lw.raster-to-gcode",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Raster to GCode for LaserWeb",
   "main": "./dist/lw.raster-to-gcode.js",
   "scripts": {
@@ -20,7 +20,9 @@
     "laserweb"
   ],
   "author": "Sébastien Mischler (skarab, Lautr3k)",
-  "contributors": ["jorgerobles"],
+  "contributors": [
+    "jorgerobles"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/lautr3k/lw.raster-to-gcode/issues"
