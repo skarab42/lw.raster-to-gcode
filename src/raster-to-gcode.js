@@ -148,6 +148,10 @@ class RasterToGcode extends CanvasGrid {
 
     // Process image and return gcode string
     run(settings) {
+        if (this.running) {
+            return
+        }
+        
         // Reset state
         this.running      = true
         this.gcode        = []
@@ -862,6 +866,10 @@ class RasterToGcode extends CanvasGrid {
 
     // Return the bitmap height-map
     getHeightMap(settings) {
+        if (this.running) {
+            return
+        }
+
         // Init loop vars
         this.running  = true
         let heightMap = []
