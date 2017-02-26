@@ -20,6 +20,7 @@
     "laserweb"
   ],
   "author": "Sébastien Mischler (skarab, Lautr3k)",
+  "contributors": ["jorgerobles"],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/lautr3k/lw.raster-to-gcode/issues"
