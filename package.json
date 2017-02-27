@@ -37,6 +37,6 @@
     "webpack-dev-server": "^1.16.2"
   },
   "dependencies": {
-    "lw.canvas-grid": "^0.2.0"
+    "lw.canvas-grid": "^0.2.6"
   }
 }
