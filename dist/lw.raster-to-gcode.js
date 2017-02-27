@@ -1346,6 +1346,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		            // Create canvas grid
 		            var line = null;
 		            var canvas = null;
+		            var pixels = null;
 		            var context = null;
 		
 		            var x = null; // cols
@@ -1359,6 +1360,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		            for (y = 0; y < this.size.rows; y++) {
 		                // Reset current line
 		                line = [];
+		                pixels = [];
 		
 		                // For each column
 		                for (x = 0; x < this.size.cols; x++) {
@@ -1400,9 +1402,13 @@ return /******/ (function(modules) { // webpackBootstrap
 		
 		                    // Add the canvas to current line
 		                    line.push(canvas);
+		
+		                    // Add the canvas image data to current line
+		                    pixels.push(context.getImageData(0, 0, canvas.width, canvas.height).data);
 		                }
 		
 		                // Add the line to canvas grid
+		                this.pixels.push(pixels);
 		                this.canvas.push(line);
 		            }
 		        }
@@ -1435,9 +1441,17 @@ return /******/ (function(modules) { // webpackBootstrap
 		            row && (y -= this.cellSize * row);
 		
 		            // Get pixel data
-		            var canvas = this.canvas[row][col];
-		            var context = canvas.getContext('2d');
-		            var pixelData = context.getImageData(x, y, 1, 1).data;
+		            var cellSize = this.cellSize;
+		
+		            if (this.size.width < cellSize) {
+		                cellSize = this.size.width;
+		            } else if (this.size.width < cellSize * (col + 1)) {
+		                cellSize = this.size.width % cellSize;
+		            }
+		
+		            var i = y * (cellSize * 4) + x * 4;
+		            var pixels = this.pixels[row][col];
+		            var pixelData = pixels.slice(i, i + 4);
 		
 		            return {
 		                color: { r: pixelData[0], g: pixelData[1], b: pixelData[2], a: pixelData[3] },
