@@ -99,17 +99,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	            ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 	
 	            toolDiameter: 0.1, // Tool diameter in millimeters
-	            rapidRate: 1500, // Feed rate in mm/min (G0 F value)
+	            rapidRate: 1500, // Rapid rate in mm/min (G0 F value)
 	            feedRate: 500, // Feed rate in mm/min (G1 F value)
-	            rateUnit: 'mm/min', // Feed rate unit [mm/min, mm/sec]
+	            rateUnit: 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
 	
 	            beamRange: { min: 0, max: 1 }, // Beam power range (Firmware value)
 	            beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
 	
 	            milling: false, // EXPERIMENTAL
 	            zSafe: 5, // Safe Z for fast move
-	            zSurface: 0, // Usinable surface
-	            zDepth: -10, // Z depth (min:white, max:black)
+	            zSurface: 0, // Usinable surface (white pixels)
+	            zDepth: -10, // Z depth (black pixels)
 	            passDepth: 1, // Pass depth in millimeters
 	
 	            offsets: { X: 0, Y: 0 }, // Global coordinates offsets
@@ -134,11 +134,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	                invertColor: false // Invert color...
 	            },
 	
-	            progress: null, // On progress callbacks
-	            progressContext: null, // On progress callback context
+	            onProgress: null, // On progress callbacks
+	            onProgressContext: null, // On progress callback context
 	
-	            done: null, // On done callback
-	            doneContext: null // On done callback context
+	            onDone: null, // On done callback
+	            onDoneContext: null, // On done callback context
+	
+	            onAbort: null, // On abort callback
+	            onAbortContext: null // On abort callback context
 	        }, settings || {});
 	
 	        // Init properties
@@ -165,8 +168,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	
 	        // Calculate PPM = Pixel Per Millimeters
-	        // this.ppm = 2540 / (this.ppi * 100)
-	        // this.ppm = parseFloat(this.ppm.toFixed(10))
 	        _this.ppm = {
 	            x: parseFloat((2540 / (_this.ppi.x * 100)).toFixed(10)),
 	            y: parseFloat((2540 / (_this.ppi.y * 100)).toFixed(10))
@@ -179,6 +180,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        };
 	
 	        // State...
+	        _this.running = false;
 	        _this.gcode = null;
 	        _this.gcodes = null;
 	        _this.currentLine = null;
@@ -206,16 +208,26 @@ return /******/ (function(modules) { // webpackBootstrap
 	            _this.rapidRate *= 60;
 	        }
 	
-	        // register user callbacks
-	        _this.progress && _this.on('progress', _this.progress, _this.progressContext);
-	        _this.done && _this.on('done', _this.done, _this.doneContext);
+	        // Register user callbacks
+	        _this._registerUserCallbacks(_this);
 	        return _this;
 	    }
 	
-	    // Process image
+	    // Register user callbacks
 	
 	
 	    _createClass(RasterToGcode, [{
+	        key: '_registerUserCallbacks',
+	        value: function _registerUserCallbacks(callbacks) {
+	            // Register user callbacks
+	            callbacks.onProgress && this.on('progress', callbacks.onProgress, callbacks.onProgressContext);
+	            callbacks.onAbort && this.on('abort', callbacks.onAbort, callbacks.onAbortContext);
+	            callbacks.onDone && this.on('done', callbacks.onDone, callbacks.onDoneContext);
+	        }
+	
+	        // Process image
+	
+	    }, {
 	        key: '_processImage',
 	        value: function _processImage() {
 	            // Call parent method
@@ -228,12 +240,25 @@ return /******/ (function(modules) { // webpackBootstrap
 	            };
 	        }
 	
+	        // Abort job
+	
+	    }, {
+	        key: 'abort',
+	        value: function abort() {
+	            this.running = false;
+	        }
+	
 	        // Process image and return gcode string
 	
 	    }, {
 	        key: 'run',
 	        value: function run(settings) {
+	            if (this.running) {
+	                return;
+	            }
+	
 	            // Reset state
+	            this.running = true;
 	            this.gcode = [];
 	            this.gcodes = [];
 	            this.lastCommands = {};
@@ -242,10 +267,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	            // Defaults settings
 	            settings = settings || {};
 	
-	            // register user callbacks
-	            settings.progress && this.on('progress', settings.progress, settings.progressContext);
-	            settings.done && this.on('done', settings.done, settings.doneContext);
+	            // Register user callbacks
+	            this._registerUserCallbacks(settings);
 	
+	            // Non blocking mode ?
 	            var nonBlocking = this.nonBlocking;
 	
 	            if (settings.nonBlocking !== undefined) {
@@ -762,9 +787,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	                // Call progress callback
 	                percent = Math.round(y / h * 100);
+	
 	                if (percent > lastPercent) {
 	                    _this4._onProgress({ gcode: gcode, percent: percent });
 	                }
+	
 	                lastPercent = percent;
 	
 	                // Skip empty gcode line
@@ -780,6 +807,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	            };
 	
 	            var processNextLine = function processNextLine() {
+	                // Aborted ?
+	                if (!_this4.running) {
+	                    return _this4._onAbort();
+	                }
+	
+	                // Process line...
 	                computeCurrentLine();
 	                processCurrentLine();
 	
@@ -799,15 +832,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    }
 	
 	                    _this4._onDone({ gcode: _this4.gcode });
+	                    _this4.running = false;
 	                }
 	            };
 	
 	            processNextLine();
-	
-	            // // For each image line
-	            // for (y = 0; y < h; y++) {
-	            //     processNextLine()
-	            // }
 	        }
 	
 	        // Parse diagonally
@@ -891,9 +920,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	                // Call progress callback
 	                percent = Math.round(lineNum / totalLines * 100);
+	
 	                if (percent > lastPercent) {
 	                    _this5._onProgress({ gcode: gcode, percent: percent });
 	                }
+	
 	                lastPercent = percent;
 	
 	                // Skip empty gcode line
@@ -909,6 +940,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	            };
 	
 	            var processNextLine = function processNextLine() {
+	                // Aborted ?
+	                if (!_this5.running) {
+	                    return _this5._onAbort();
+	                }
+	
+	                // Process line...
 	                computeCurrentLine(x, y);
 	                processCurrentLine();
 	
@@ -927,30 +964,26 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    }
 	                } else {
 	                    _this5._onDone({ gcode: _this5.gcode });
+	                    _this5.running = false;
 	                }
 	            };
 	
 	            processNextLine();
-	
-	            // // For each image line
-	            // for (y = 0; y < h; y++) {
-	            //     scanDiagonalLine(x, y)
-	            // }
-	            //
-	            // // For each image column (exept the first one)
-	            // for (x = 1, y--; x < w; x++) {
-	            //     scanDiagonalLine(x, y)
-	            // }
 	        }
 	    }, {
 	        key: '_onProgress',
 	        value: function _onProgress(event) {
-	            //console.log('progress:', event.percent);
+	            //console.log('progress:', event.percent)
 	        }
 	    }, {
 	        key: '_onDone',
 	        value: function _onDone(event) {
-	            //console.log('done:', event.gcode.length);
+	            //console.log('done:', event.gcode.length)
+	        }
+	    }, {
+	        key: '_onAbort',
+	        value: function _onAbort() {
+	            //console.log('abort')
 	        }
 	    }, {
 	        key: 'on',
@@ -977,8 +1010,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	        value: function getHeightMap(settings) {
 	            var _this7 = this;
 	
-	            // Init loop vars{
+	            if (this.running) {
+	                return;
+	            }
+	
+	            // Init loop vars
+	            this.running = true;
 	            var heightMap = [];
+	
 	            var x = 0;
 	            var y = 0;
 	            var w = this.size.width;
@@ -990,9 +1029,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	            // Defaults settings
 	            settings = settings || {};
 	
-	            // register user callbacks
-	            var onProgress = settings.progress || function () {};
-	            var onDone = settings.done || function () {};
+	            // Register user callbacks
+	            this._registerUserCallbacks(settings);
 	
 	            // Non blocking mode ?
 	            var nonBlocking = this.nonBlocking;
@@ -1014,7 +1052,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	                percent = Math.round(y / h * 100);
 	
 	                if (percent > lastPercent) {
-	                    onProgress.call(settings.progressContext || _this7, { pixels: pixels, percent: percent });
+	                    //onProgress.call(settings.progressContext || this, { pixels, percent })
+	                    _this7._onProgress({ pixels: pixels, percent: percent });
 	                }
 	
 	                lastPercent = percent;
@@ -1024,6 +1063,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	            };
 	
 	            var processNextLine = function processNextLine() {
+	                // Aborted ?
+	                if (!_this7.running) {
+	                    return _this7._onAbort();
+	                }
+	
+	                // Process line...
 	                computeCurrentLine();
 	
 	                y++;
@@ -1035,7 +1080,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	                        processNextLine();
 	                    }
 	                } else {
-	                    onDone.call(settings.doneContext || _this7, { heightMap: heightMap });
+	                    //onDone.call(settings.doneContext || this, { heightMap })
+	                    _this7._onDone({ heightMap: heightMap });
+	                    _this7.running = false;
 	                }
 	            };
 	
@@ -1299,6 +1346,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		            // Create canvas grid
 		            var line = null;
 		            var canvas = null;
+		            var pixels = null;
 		            var context = null;
 		
 		            var x = null; // cols
@@ -1312,6 +1360,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		            for (y = 0; y < this.size.rows; y++) {
 		                // Reset current line
 		                line = [];
+		                pixels = [];
 		
 		                // For each column
 		                for (x = 0; x < this.size.cols; x++) {
@@ -1353,9 +1402,13 @@ return /******/ (function(modules) { // webpackBootstrap
 		
 		                    // Add the canvas to current line
 		                    line.push(canvas);
+		
+		                    // Add the canvas image data to current line
+		                    pixels.push(context.getImageData(0, 0, canvas.width, canvas.height).data);
 		                }
 		
 		                // Add the line to canvas grid
+		                this.pixels.push(pixels);
 		                this.canvas.push(line);
 		            }
 		        }
@@ -1388,9 +1441,17 @@ return /******/ (function(modules) { // webpackBootstrap
 		            row && (y -= this.cellSize * row);
 		
 		            // Get pixel data
-		            var canvas = this.canvas[row][col];
-		            var context = canvas.getContext('2d');
-		            var pixelData = context.getImageData(x, y, 1, 1).data;
+		            var cellSize = this.cellSize;
+		
+		            if (this.size.width < cellSize) {
+		                cellSize = this.size.width;
+		            } else if (this.size.width < cellSize * (col + 1)) {
+		                cellSize = this.size.width % cellSize;
+		            }
+		
+		            var i = y * (cellSize * 4) + x * 4;
+		            var pixels = this.pixels[row][col];
+		            var pixelData = pixels.slice(i, i + 4);
 		
 		            return {
 		                color: { r: pixelData[0], g: pixelData[1], b: pixelData[2], a: pixelData[3] },
