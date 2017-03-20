@@ -9,48 +9,48 @@ class RasterToGcode extends CanvasGrid {
             ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
             toolDiameter: 0.1,      // Tool diameter in millimeters
-            rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value)
-            feedRate    : 500,      // Feed rate in mm/min (G1 F value)
-            rateUnit    : 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
+            rapidRate: 1500,     // Rapid rate in mm/min (G0 F value). False to disable
+            feedRate: 500,      // Feed rate in mm/min (G1 F value)
+            rateUnit: 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
 
             beamRange: { min: 0, max: 1 },   // Beam power range (Firmware value)
             beamPower: { min: 0, max: 100 }, // Beam power (S value) as percentage of beamRange
 
-            milling  : false, // EXPERIMENTAL
-            zSafe    : 5,     // Safe Z for fast move
-            zSurface : 0,     // Usinable surface (white pixels)
-            zDepth   : -10,   // Z depth (black pixels)
+            milling: false, // EXPERIMENTAL
+            zSafe: 5,     // Safe Z for fast move
+            zSurface: 0,     // Usinable surface (white pixels)
+            zDepth: -10,   // Z depth (black pixels)
             passDepth: 1,     // Pass depth in millimeters
 
-            offsets  : { X: 0, Y: 0 }, // Global coordinates offsets
-            trimLine : true,           // Trim trailing white pixels
+            offsets: { X: 0, Y: 0 }, // Global coordinates offsets
+            trimLine: true,           // Trim trailing white pixels
             joinPixel: true,           // Join consecutive pixels with same intensity
             burnWhite: true,           // [true = G1 S0 | false = G0] on inner white pixels
-            verboseG : false,          // Output verbose GCode (print each commands)
-            diagonal : false,          // Go diagonally (increase the distance between points)
-            overscan : 0,              // Add some extra white space (in millimeters) before and after each line
+            verboseG: false,          // Output verbose GCode (print each commands)
+            diagonal: false,          // Go diagonally (increase the distance between points)
+            overscan: 0,              // Add some extra white space (in millimeters) before and after each line
 
             precision: { X: 2, Y: 2, S: 4 }, // Number of decimals for each commands
 
             nonBlocking: true, // Use setTimeout to avoid blocking the UI
 
             filters: {
-                smoothing   : 0,      // Smoothing the input image ?
-                brightness  : 0,      // Image brightness [-255 to +255]
-                contrast    : 0,      // Image contrast [-255 to +255]
-                gamma       : 0,      // Image gamma correction [0.01 to 7.99]
-                grayscale   : 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
+                smoothing: 0,      // Smoothing the input image ?
+                brightness: 0,      // Image brightness [-255 to +255]
+                contrast: 0,      // Image contrast [-255 to +255]
+                gamma: 0,      // Image gamma correction [0.01 to 7.99]
+                grayscale: 'none', // Graysale algorithm [average, luma, luma-601, luma-709, luma-240, desaturation, decomposition-[min|max], [red|green|blue]-chanel]
                 shadesOfGray: 256,    // Number of shades of gray [2-256]
-                invertColor : false   // Invert color...
+                invertColor: false   // Invert color...
             },
 
-            onProgress       : null, // On progress callbacks
+            onProgress: null, // On progress callbacks
             onProgressContext: null, // On progress callback context
 
-            onDone       : null, // On done callback
+            onDone: null, // On done callback
             onDoneContext: null, // On done callback context
 
-            onAbort       : null, // On abort callback
+            onAbort: null, // On abort callback
             onAbortContext: null  // On abort callback context
         }, settings || {})
 
@@ -72,7 +72,7 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Uniforme ppi
-        if (! this.ppi.x) {
+        if (!this.ppi.x) {
             this.ppi = { x: this.ppi, y: this.ppi }
         }
 
@@ -89,14 +89,14 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // State...
-        this.running      = false
-        this.gcode        = null
-        this.gcodes       = null
-        this.currentLine  = null
+        this.running = false
+        this.gcode = null
+        this.gcodes = null
+        this.currentLine = null
         this.lastCommands = null
 
         // Output size in millimeters
-        this.outputSize = { width : 0, height: 0 }
+        this.outputSize = { width: 0, height: 0 }
 
         // G0 command
         this.G1 = ['G', 1]
@@ -113,8 +113,10 @@ class RasterToGcode extends CanvasGrid {
 
         // Adjuste feed rate to mm/min
         if (this.rateUnit === 'mm/sec') {
-            this.feedRate  *= 60
-            this.rapidRate *= 60
+            this.feedRate *= 60
+            if (this.rapidRate !== false) {
+                this.rapidRate *= 60
+            }
         }
 
         // Register user callbacks
@@ -136,7 +138,7 @@ class RasterToGcode extends CanvasGrid {
 
         // Calculate output size
         this.outputSize = {
-            width : this.size.width  * (this.toolDiameter * 1000) / 1000,
+            width: this.size.width * (this.toolDiameter * 1000) / 1000,
             height: this.size.height * (this.toolDiameter * 1000) / 1000
         }
     }
@@ -151,13 +153,13 @@ class RasterToGcode extends CanvasGrid {
         if (this.running) {
             return
         }
-        
+
         // Reset state
-        this.running      = true
-        this.gcode        = []
-        this.gcodes       = []
+        this.running = true
+        this.gcode = []
+        this.gcodes = []
         this.lastCommands = {}
-        this.currentLine  = null
+        this.currentLine = null
 
         // Defaults settings
         settings = settings || {}
@@ -183,7 +185,7 @@ class RasterToGcode extends CanvasGrid {
             this._scanHorizontally(nonBlocking)
         }
 
-        if (! nonBlocking) {
+        if (!nonBlocking) {
             return this.gcode
         }
     }
@@ -196,7 +198,7 @@ class RasterToGcode extends CanvasGrid {
             '; PPI        : x: ' + this.ppi.x + ' - y: ' + this.ppi.y,
             '; PPM        : x: ' + this.ppm.x + ' - y: ' + this.ppm.y,
             '; Tool diam. : ' + this.toolDiameter + ' mm',
-            '; Rapid rate : ' + this.rapidRate + ' ' + this.rateUnit,
+            '; Rapid rate : ' + (this.rapidRate !== false ? (this.rapidRate + ' ' + this.rateUnit) : 'inherit'),
             '; Feed rate  : ' + this.feedRate + ' ' + this.rateUnit
         )
 
@@ -218,7 +220,7 @@ class RasterToGcode extends CanvasGrid {
         let options = ['smoothing', 'trimLine', 'joinPixel', 'burnWhite', 'verboseG', 'diagonal']
 
         for (var i = options.length - 1; i >= 0; i--) {
-            if (! this[options[i]]) {
+            if (!this[options[i]]) {
                 options.splice(i, 1)
             }
         }
@@ -228,12 +230,12 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Set feed rates
-        this.gcode.push(
-            '',
-            'G0 F' + this.rapidRate,
-            'G1 F' + this.feedRate,
-            ''
-        )
+        this.gcode.push('')
+        if (this.rapidRate !== false) {
+            this.gcode.push('G0 F' + this.rapidRate)
+        }
+        this.gcode.push('G1 F' + this.feedRate)
+        this.gcode.push('')
     }
 
     // Map S value to pixel power
@@ -299,7 +301,7 @@ class RasterToGcode extends CanvasGrid {
         let point = this.currentLine[index]
 
         // No point
-        if (! point) {
+        if (!point) {
             return null
         }
 
@@ -346,7 +348,7 @@ class RasterToGcode extends CanvasGrid {
         // Remove white spaces from the left
         let point = this.currentLine[0]
 
-        while (point && ! point.p) {
+        while (point && !point.p) {
             this.currentLine.shift()
             point = this.currentLine[0]
         }
@@ -354,7 +356,7 @@ class RasterToGcode extends CanvasGrid {
         // Remove white spaces from the right
         point = this.currentLine[this.currentLine.length - 2]
 
-        while (point && ! point.p) {
+        while (point && !point.p) {
             this.currentLine.pop()
             point = this.currentLine[this.currentLine.length - 2]
         }
@@ -401,21 +403,21 @@ class RasterToGcode extends CanvasGrid {
 
         // Get first/last point
         let firstPoint = this.currentLine[0]
-        let lastPoint  = this.currentLine[this.currentLine.length - 1]
+        let lastPoint = this.currentLine[this.currentLine.length - 1]
 
         // Is last white/colored point ?
-        firstPoint.s && (firstPoint.lastWhite  = true)
-        lastPoint.s  && (lastPoint.lastColored = true)
+        firstPoint.s && (firstPoint.lastWhite = true)
+        lastPoint.s && (lastPoint.lastColored = true)
 
         // Reversed line ?
         reversed ? (lastPoint.s = 0) : (firstPoint.s = 0)
 
         // Create left/right points
-        let rightPoint = { x: lastPoint.x + pixels , y: lastPoint.y , s: 0, p: 0 }
-        let leftPoint  = { x: firstPoint.x - pixels, y: firstPoint.y, s: 0, p: 0 }
+        let rightPoint = { x: lastPoint.x + pixels, y: lastPoint.y, s: 0, p: 0 }
+        let leftPoint = { x: firstPoint.x - pixels, y: firstPoint.y, s: 0, p: 0 }
 
         if (this.diagonal) {
-            leftPoint.y  += pixels
+            leftPoint.y += pixels
             rightPoint.y -= pixels
         }
 
@@ -436,7 +438,7 @@ class RasterToGcode extends CanvasGrid {
     // Process current line and return an array of GCode text lines
     _processMillingLine(reversed) {
         // Skip empty line
-        if (! this._trimCurrentLine()) {
+        if (!this._trimCurrentLine()) {
             return null
         }
 
@@ -485,7 +487,7 @@ class RasterToGcode extends CanvasGrid {
                         plung = false
                     }
 
-                    Z    = point.S
+                    Z = point.S
                     zMax = this.passDepth * passNum
 
                     // Last pass
@@ -522,7 +524,7 @@ class RasterToGcode extends CanvasGrid {
         for (var i = 1; i <= this.passes; i++) {
             pass(i)
 
-            if (! gcode.length) {
+            if (!gcode.length) {
                 break
             }
 
@@ -547,7 +549,7 @@ class RasterToGcode extends CanvasGrid {
     // Process current line and return an array of GCode text lines
     _processLaserLine(reversed) {
         // Trim trailing white spaces ?
-        if (this.trimLine && ! this._trimCurrentLine()) {
+        if (this.trimLine && !this._trimCurrentLine()) {
             // Skip empty line
             return null
         }
@@ -614,8 +616,8 @@ class RasterToGcode extends CanvasGrid {
         let w = this.size.width
         let h = this.size.height
 
-        let reversed    = false
-        let lastWhite   = false
+        let reversed = false
+        let lastWhite = false
         let lastColored = false
 
         let computeCurrentLine = () => {
@@ -631,11 +633,11 @@ class RasterToGcode extends CanvasGrid {
                 s = p = this._getPixelPower(x, y, p)
 
                 // Is last white/colored pixel
-                lastWhite   = point && ! point.p && p
-                lastColored = point && point.p && ! p
+                lastWhite = point && !point.p && p
+                lastColored = point && point.p && !p
 
                 // Pixel color from last one on normal line
-                if (! reversed && point) {
+                if (!reversed && point) {
                     s = point.p
                 }
 
@@ -643,7 +645,7 @@ class RasterToGcode extends CanvasGrid {
                 point = { x: x, y: y, s: s, p: p }
 
                 // Set last white/colored pixel
-                lastWhite   && (point.lastWhite   = true)
+                lastWhite && (point.lastWhite = true)
                 lastColored && (point.lastColored = true)
 
                 // Add point to current line
@@ -651,7 +653,7 @@ class RasterToGcode extends CanvasGrid {
             }
         }
 
-        let percent     = 0
+        let percent = 0
         let lastPercent = 0
 
         let processCurrentLine = () => {
@@ -668,12 +670,12 @@ class RasterToGcode extends CanvasGrid {
             lastPercent = percent
 
             // Skip empty gcode line
-            if (! gcode) {
+            if (!gcode) {
                 return
             }
 
             // Toggle line state
-            reversed = ! reversed
+            reversed = !reversed
 
             // Concat line
             this.gcode.push.apply(this.gcode, gcode)
@@ -681,7 +683,7 @@ class RasterToGcode extends CanvasGrid {
 
         let processNextLine = () => {
             // Aborted ?
-            if (! this.running) {
+            if (!this.running) {
                 return this._onAbort()
             }
 
@@ -722,10 +724,10 @@ class RasterToGcode extends CanvasGrid {
         let w = this.size.width
         let h = this.size.height
 
-        let totalLines  = w + h - 1
-        let lineNum     = 0
-        let reversed    = false
-        let lastWhite   = false
+        let totalLines = w + h - 1
+        let lineNum = 0
+        let reversed = false
+        let lastWhite = false
         let lastColored = false
 
         let computeCurrentLine = (x, y) => {
@@ -738,7 +740,7 @@ class RasterToGcode extends CanvasGrid {
             // Increment line num
             lineNum++
 
-            while(true) {
+            while (true) {
                 // Y limit reached !
                 if (y < -1 || y == h) {
                     break
@@ -753,11 +755,11 @@ class RasterToGcode extends CanvasGrid {
                 s = p = this._getPixelPower(x, y, p)
 
                 // Is last white/colored pixel
-                lastWhite   = point && (! point.p && p)
-                lastColored = point && (point.p && ! p)
+                lastWhite = point && (!point.p && p)
+                lastColored = point && (point.p && !p)
 
                 // Pixel color from last one on normal line
-                if (! reversed && point) {
+                if (!reversed && point) {
                     s = point.p
                 }
 
@@ -765,7 +767,7 @@ class RasterToGcode extends CanvasGrid {
                 point = { x: x, y: y, s: s, p: p }
 
                 // Set last white/colored pixel
-                lastWhite   && (point.lastWhite   = true)
+                lastWhite && (point.lastWhite = true)
                 lastColored && (point.lastColored = true)
 
                 // Add the new point
@@ -777,7 +779,7 @@ class RasterToGcode extends CanvasGrid {
             }
         }
 
-        let percent     = 0
+        let percent = 0
         let lastPercent = 0
 
         let processCurrentLine = () => {
@@ -794,12 +796,12 @@ class RasterToGcode extends CanvasGrid {
             lastPercent = percent
 
             // Skip empty gcode line
-            if (! gcode) {
+            if (!gcode) {
                 return
             }
 
             // Toggle line state
-            reversed = ! reversed
+            reversed = !reversed
 
             // Concat line
             this.gcode.push.apply(this.gcode, gcode)
@@ -807,7 +809,7 @@ class RasterToGcode extends CanvasGrid {
 
         let processNextLine = () => {
             // Aborted ?
-            if (! this.running) {
+            if (!this.running) {
                 return this._onAbort()
             }
 
@@ -815,7 +817,7 @@ class RasterToGcode extends CanvasGrid {
             computeCurrentLine(x, y)
             processCurrentLine()
 
-            if (! x) y++
+            if (!x) y++
             else x++
 
             if (y === h) {
@@ -855,7 +857,7 @@ class RasterToGcode extends CanvasGrid {
     on(event, callback, context) {
         let method = '_on' + event[0].toUpperCase() + event.slice(1)
 
-        if (! this[method] || typeof this[method] !== 'function') {
+        if (!this[method] || typeof this[method] !== 'function') {
             throw new Error('Undefined event: ' + event)
         }
 
@@ -871,7 +873,7 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Init loop vars
-        this.running  = true
+        this.running = true
         let heightMap = []
 
         let x = 0
@@ -879,7 +881,7 @@ class RasterToGcode extends CanvasGrid {
         let w = this.size.width
         let h = this.size.height
 
-        let percent     = 0
+        let percent = 0
         let lastPercent = 0
 
         // Defaults settings
@@ -920,7 +922,7 @@ class RasterToGcode extends CanvasGrid {
 
         let processNextLine = () => {
             // Aborted ?
-            if (! this.running) {
+            if (!this.running) {
                 return this._onAbort()
             }
 
@@ -946,7 +948,7 @@ class RasterToGcode extends CanvasGrid {
 
         processNextLine()
 
-        if (! nonBlocking) {
+        if (!nonBlocking) {
             return heightMap
         }
     }
