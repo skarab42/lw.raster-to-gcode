@@ -31,7 +31,7 @@ let settings = {
     ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
     toolDiameter: 0.1,      // Tool diameter in millimeters
-    rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value)
+    rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value) False to disable
     feedRate    : 500,      // Feed rate in mm/min (G1 F value)
     rateUnit    : 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
 
