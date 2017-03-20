@@ -596,6 +596,9 @@ class RasterToGcode extends CanvasGrid {
         // Move to start of the line
         addCommand(this.G0, ['X', point.X], ['Y', point.Y], ['S', 0])
 
+        // Get next point
+        point = this._getPoint(++index)
+
         // For each point on the line
         while (point) {
             // Burn to next point
