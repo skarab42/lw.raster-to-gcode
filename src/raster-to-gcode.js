@@ -9,7 +9,7 @@ class RasterToGcode extends CanvasGrid {
             ppi: { x: 254, y: 254 }, // Pixel Per Inch (25.4 ppi == 1 ppm)
 
             toolDiameter: 0.1,      // Tool diameter in millimeters
-            rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value)
+            rapidRate   : 1500,     // Rapid rate in mm/min (G0 F value) False to disable
             feedRate    : 500,      // Feed rate in mm/min (G1 F value)
             rateUnit    : 'mm/min', // Rapid/Feed rate unit [mm/min, mm/sec]
 
@@ -114,7 +114,8 @@ class RasterToGcode extends CanvasGrid {
         // Adjuste feed rate to mm/min
         if (this.rateUnit === 'mm/sec') {
             this.feedRate  *= 60
-            this.rapidRate *= 60
+            if (this.rapidRate !==false) 
+                  this.rapidRate *= 60
         }
 
         // Register user callbacks
@@ -196,7 +197,7 @@ class RasterToGcode extends CanvasGrid {
             '; PPI        : x: ' + this.ppi.x + ' - y: ' + this.ppi.y,
             '; PPM        : x: ' + this.ppm.x + ' - y: ' + this.ppm.y,
             '; Tool diam. : ' + this.toolDiameter + ' mm',
-            '; Rapid rate : ' + this.rapidRate + ' ' + this.rateUnit,
+            '; Rapid rate : ' + ((this.rapidRate!==false)? (this.rapidRate + ' ' + this.rateUnit) : 'inherit') ,
             '; Feed rate  : ' + this.feedRate + ' ' + this.rateUnit
         )
 
@@ -228,12 +229,10 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Set feed rates
-        this.gcode.push(
-            '',
-            'G0 F' + this.rapidRate,
-            'G1 F' + this.feedRate,
-            ''
-        )
+        this.gcode.push('')
+        if (this.rapidRate!==false) this.gcode.push('G0 F' + this.rapidRate),
+        this.gcode.push('G1 F' + this.feedRate)
+        this.gcode.push('')
     }
 
     // Map S value to pixel power
