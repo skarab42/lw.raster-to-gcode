@@ -44,21 +44,18 @@ class RasterToGcode extends CanvasGrid {
                 invertColor : false   // Invert color...
             },
 
-            progress       : null, // On progress callbacks
-            progressContext: null, // On progress callback context
+            onProgress       : null, // On progress callbacks
+            onProgressContext: null, // On progress callback context
 
-            done       : null, // On done callback
-            doneContext: null,  // On done callback context
+            onDone       : null, // On done callback
+            onDoneContext: null, // On done callback context
 
-            abort      : null,
-            abortContext: null
+            onAbort       : null, // On abort callback
+            onAbortContext: null  // On abort callback context
         }, settings || {})
 
         // Init properties
         super(settings)
-
-        // Run flag
-        this.running=false;
 
         // Milling settings
         if (this.milling) {
@@ -80,8 +77,6 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Calculate PPM = Pixel Per Millimeters
-        // this.ppm = 2540 / (this.ppi * 100)
-        // this.ppm = parseFloat(this.ppm.toFixed(10))
         this.ppm = {
             x: parseFloat((2540 / (this.ppi.x * 100)).toFixed(10)),
             y: parseFloat((2540 / (this.ppi.y * 100)).toFixed(10))
@@ -94,6 +89,7 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // State...
+        this.running      = false
         this.gcode        = null
         this.gcodes       = null
         this.currentLine  = null
@@ -118,14 +114,19 @@ class RasterToGcode extends CanvasGrid {
         // Adjuste feed rate to mm/min
         if (this.rateUnit === 'mm/sec') {
             this.feedRate  *= 60
-            if (this.rapidRate !==false) 
-                this.rapidRate *= 60
+            this.rapidRate *= 60
         }
 
-        // register user callbacks
-        this.progress && this.on('progress', this.progress, this.progressContext)
-        this.done && this.on('done', this.done, this.doneContext)
-        this.abort && this.on('abort', this.abort, this.abortContext)
+        // Register user callbacks
+        this._registerUserCallbacks(this)
+    }
+
+    // Register user callbacks
+    _registerUserCallbacks(callbacks) {
+        // Register user callbacks
+        callbacks.onProgress && this.on('progress', callbacks.onProgress, callbacks.onProgressContext)
+        callbacks.onAbort && this.on('abort', callbacks.onAbort, callbacks.onAbortContext)
+        callbacks.onDone && this.on('done', callbacks.onDone, callbacks.onDoneContext)
     }
 
     // Process image
@@ -140,22 +141,31 @@ class RasterToGcode extends CanvasGrid {
         }
     }
 
+    // Abort job
+    abort() {
+        this.running = false
+    }
+
     // Process image and return gcode string
     run(settings) {
+        if (this.running) {
+            return
+        }
+        
         // Reset state
+        this.running      = true
         this.gcode        = []
         this.gcodes       = []
         this.lastCommands = {}
         this.currentLine  = null
-        this.running=true;
 
         // Defaults settings
         settings = settings || {}
 
-        // register user callbacks
-        settings.progress && this.on('progress', settings.progress, settings.progressContext)
-        settings.done && this.on('done', settings.done, settings.doneContext)
+        // Register user callbacks
+        this._registerUserCallbacks(settings)
 
+        // Non blocking mode ?
         let nonBlocking = this.nonBlocking
 
         if (settings.nonBlocking !== undefined) {
@@ -174,15 +184,9 @@ class RasterToGcode extends CanvasGrid {
         }
 
         if (! nonBlocking) {
-            this.running=false;
             return this.gcode
         }
     }
-
-    terminate() {
-        if (this.running) this.running=false;
-    }
-    
 
     _addHeader() {
         // Base headers
@@ -192,7 +196,7 @@ class RasterToGcode extends CanvasGrid {
             '; PPI        : x: ' + this.ppi.x + ' - y: ' + this.ppi.y,
             '; PPM        : x: ' + this.ppm.x + ' - y: ' + this.ppm.y,
             '; Tool diam. : ' + this.toolDiameter + ' mm',
-            '; Rapid rate : ' + ((this.rapidRate!==false)? (this.rapidRate + ' ' + this.rateUnit) : 'inherit') ,
+            '; Rapid rate : ' + this.rapidRate + ' ' + this.rateUnit,
             '; Feed rate  : ' + this.feedRate + ' ' + this.rateUnit
         )
 
@@ -224,10 +228,12 @@ class RasterToGcode extends CanvasGrid {
         }
 
         // Set feed rates
-        this.gcode.push('')
-        if (this.rapidRate!==false) this.gcode.push('G0 F' + this.rapidRate),
-        this.gcode.push('G1 F' + this.feedRate)
-        this.gcode.push('')
+        this.gcode.push(
+            '',
+            'G0 F' + this.rapidRate,
+            'G1 F' + this.feedRate,
+            ''
+        )
     }
 
     // Map S value to pixel power
@@ -271,7 +277,7 @@ class RasterToGcode extends CanvasGrid {
     _getPixelPower(x, y, defaultValue) {
         try {
             // Reverse Y value since canvas as top/left origin
-            y = this.size.height - y - 1;
+            y = this.size.height - y - 1
 
             // Get pixel info
             let pixel = this.getPixel(x, y)
@@ -654,9 +660,11 @@ class RasterToGcode extends CanvasGrid {
 
             // Call progress callback
             percent = Math.round((y / h) * 100)
+
             if (percent > lastPercent) {
                 this._onProgress({ gcode, percent })
             }
+
             lastPercent = percent
 
             // Skip empty gcode line
@@ -672,21 +680,23 @@ class RasterToGcode extends CanvasGrid {
         }
 
         let processNextLine = () => {
+            // Aborted ?
+            if (! this.running) {
+                return this._onAbort()
+            }
+
+            // Process line...
             computeCurrentLine()
             processCurrentLine()
 
             y++
 
             if (y < h) {
-                if (this.running){
-                    if (nonBlocking) {
-                        setTimeout(processNextLine, 0)
-                    }
-                    else {
-                        processNextLine()
-                    }
-                } else {
-                    this._onAbort()
+                if (nonBlocking) {
+                    setTimeout(processNextLine, 0)
+                }
+                else {
+                    processNextLine()
                 }
             }
             else {
@@ -695,17 +705,13 @@ class RasterToGcode extends CanvasGrid {
                         this.gcode.push.apply(this.gcode, gcode)
                     })
                 }
-                this.running=false;
+
                 this._onDone({ gcode: this.gcode })
+                this.running = false
             }
         }
 
         processNextLine()
-
-        // // For each image line
-        // for (y = 0; y < h; y++) {
-        //     processNextLine()
-        // }
     }
 
     // Parse diagonally
@@ -780,9 +786,11 @@ class RasterToGcode extends CanvasGrid {
 
             // Call progress callback
             percent = Math.round((lineNum / totalLines) * 100)
+
             if (percent > lastPercent) {
                 this._onProgress({ gcode, percent })
             }
+
             lastPercent = percent
 
             // Skip empty gcode line
@@ -798,6 +806,12 @@ class RasterToGcode extends CanvasGrid {
         }
 
         let processNextLine = () => {
+            // Aborted ?
+            if (! this.running) {
+                return this._onAbort()
+            }
+
+            // Process line...
             computeCurrentLine(x, y)
             processCurrentLine()
 
@@ -810,46 +824,32 @@ class RasterToGcode extends CanvasGrid {
             }
 
             if (y < h && x < w) {
-                if (this.running){
-                    if (nonBlocking) {
-                        setTimeout(processNextLine, 0)
-                    }
-                    else {
-                        processNextLine()
-                    }
-                } else {
-                    this._onAbort();
+                if (nonBlocking) {
+                    setTimeout(processNextLine, 0)
+                }
+                else {
+                    processNextLine()
                 }
             }
             else {
-                this.running=false;
                 this._onDone({ gcode: this.gcode })
+                this.running = false
             }
         }
 
         processNextLine()
-
-        // // For each image line
-        // for (y = 0; y < h; y++) {
-        //     scanDiagonalLine(x, y)
-        // }
-        //
-        // // For each image column (exept the first one)
-        // for (x = 1, y--; x < w; x++) {
-        //     scanDiagonalLine(x, y)
-        // }
     }
 
     _onProgress(event) {
-        //console.log('progress:', event.percent);
+        //console.log('progress:', event.percent)
     }
 
     _onDone(event) {
-        //console.log('done:', event.gcode.length);
+        //console.log('done:', event.gcode.length)
     }
 
-    _onAbort(event) {
-
+    _onAbort() {
+        //console.log('abort')
     }
 
     on(event, callback, context) {
@@ -866,8 +866,14 @@ class RasterToGcode extends CanvasGrid {
 
     // Return the bitmap height-map
     getHeightMap(settings) {
-        // Init loop vars{
+        if (this.running) {
+            return
+        }
+
+        // Init loop vars
+        this.running  = true
         let heightMap = []
+
         let x = 0
         let y = 0
         let w = this.size.width
@@ -879,9 +885,8 @@ class RasterToGcode extends CanvasGrid {
         // Defaults settings
         settings = settings || {}
 
-        // register user callbacks
-        let onProgress = settings.progress || function() {}
-        let onDone     = settings.done     || function() {}
+        // Register user callbacks
+        this._registerUserCallbacks(settings)
 
         // Non blocking mode ?
         let nonBlocking = this.nonBlocking
@@ -903,7 +908,8 @@ class RasterToGcode extends CanvasGrid {
             percent = Math.round((y / h) * 100)
 
             if (percent > lastPercent) {
-                onProgress.call(settings.progressContext || this, { pixels, percent })
+                //onProgress.call(settings.progressContext || this, { pixels, percent })
+                this._onProgress({ pixels, percent })
             }
 
             lastPercent = percent
@@ -913,25 +919,28 @@ class RasterToGcode extends CanvasGrid {
         }
 
         let processNextLine = () => {
+            // Aborted ?
+            if (! this.running) {
+                return this._onAbort()
+            }
+
+            // Process line...
             computeCurrentLine()
 
             y++
 
             if (y < h) {
-                if (this.running) {
-                    if (nonBlocking) {
-                        setTimeout(processNextLine, 0)
-                    }
-                    else {
-                        processNextLine()
-                    }
-                } else {
-                    this._onAbort()
+                if (nonBlocking) {
+                    setTimeout(processNextLine, 0)
+                }
+                else {
+                    processNextLine()
                 }
             }
             else {
-                this.running=false
-                onDone.call(settings.doneContext || this, { heightMap })
+                //onDone.call(settings.doneContext || this, { heightMap })
+                this._onDone({ heightMap })
+                this.running = false
             }
         }
 
